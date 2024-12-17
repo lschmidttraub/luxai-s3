@@ -7,6 +7,16 @@ from utils import *
 class Observation:
     def __init__(self, player: int, env_config: dict):
         self.player = player
+        params: dict[str, int] = env_config
+        self.max_units = params["max_units"]
+        self.match_count = params["match_count_per_episode"]
+        self.max_steps = params["max_steps_in_match"]
+        self.H = params["map_height"]
+        self.W = params["map_width"]
+        self.move_cost = params["unit_move_cost"]
+        self.sap_cost = params["unit_sap_cost"]
+        self.sap_range = params["unit_sap_range"]
+        self.sensor_range = params["unit_sensor_range"]
         self.step: int
         self.pts: tuple[int, int] = (0, 0)
         self.pt_diff: tuple[int, int]
@@ -14,15 +24,14 @@ class Observation:
         self.units: dict[int, tuple[tuple[int, int], int]] = {}
         self.enemy_units: dict[int, tuple[tuple[int, int], int]] = {}
         self.energy: ma.MaskedArray = ma.array(
-            np.zeros((24, 24)), mask=np.ones((24, 24)).astype(bool)
+            np.zeros((self.W, self.H)), mask=np.ones((self.W, self.H)).astype(bool)
         )
-        self.vision: np.ndarray = np.zeros((24, 24))
-        self.exploration = np.full((24, 24), -1)
+        self.vision: np.ndarray = np.zeros((self.W, self.H))
+        self.exploration = np.full((self.W, self.H), -1)
         # Relic nodes are the tiles on the map, whilst relic tiles are the map tiles that give points
-        self.relic_tiles: list[tuple[int, int]] = []
-        self.relic_nodes: list[tuple[int, int]] = []
-        self.relic_tile_mask: np.ndarray = np.zeros((24, 24)).astype(bool)
-        self.params: dict[str, int] = env_config
+        self.relic_tiles: set[tuple[int, int]]
+        self.relic_nodes: set[tuple[int, int]]
+        self.relic_tile_mask: np.ndarray = np.zeros((self.W, self.H)).astype(bool)
 
     def update_observation(self, step: int, obs: dict) -> None:
         self.step = step
@@ -47,12 +56,12 @@ class Observation:
         )
         self.update_vis(new_tiles)
         self.update_exploration(vision_mask)
-        self.relic_nodes = [
-            (n[0], n[1])
+        self.relic_nodes = {
+            pair
             for n, m in zip(obs["relic_nodes"], obs["relic_nodes_mask"])
             if m
-        ]
-        new_point = obs["team_points"]
+            for pair in [(n[0], n[1]), (n[1], n[0])]
+        }
 
         pts = obs["team_points"]
         self.pt_diff = pts - self.pts

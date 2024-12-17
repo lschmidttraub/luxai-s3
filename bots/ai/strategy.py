@@ -6,17 +6,18 @@ from utils import *
 class Strategy:
     def __init__(self, observation: Observation):
         self.obs = observation
-        self.relic_tile_mask: np.ndarray = np.zeros((24, 24)).astype(bool)
-        self.relic_tile_probs: np.ndarray = np.zeros((24, 24))
+        H, W = self.obs.H, self.obs.W
+        self.relic_tile_mask: np.ndarray = np.zeros((W, H)).astype(bool)
+        self.relic_tile_probs: np.ndarray = np.zeros((W, H))
 
     def choose_action(self) -> np.ndarray:
-        actions = np.zeros((self.obs.params["max_units"], 3), dtype=int)
+        actions = np.zeros((self.obs.max_units, 3), dtype=int)
         units = self.obs.units
         relic_nodes = self.obs.relic_nodes
         vision = self.obs.vision
         for u_id, (pos, energy) in units.items():
             if len(relic_nodes) > 0:
-                m_relic = relic_nodes[0]
+                m_relic = next(iter(relic_nodes))
                 m_dist = 100
                 for relic in relic_nodes:
                     if dist(pos, relic) < m_dist:
@@ -42,13 +43,16 @@ class Strategy:
             self.relic_tile_mask[pos2] = True
 
     def explore_dir(self, pos: tuple[int, int]) -> tuple[int, int]:
-        nearest_unexplored = (12, 12)
+        W, H = self.obs.W, self.obs.H
+        nearest_unexplored = (W // 2, H // 2)
         x, y = pos
-        for i in range(10):
-            for j in range(10):
+        m_dist = max(W, H)
+        for d in range(m_dist):
+            for i in range(d + 1):
+                j = d + 1 - i
                 for m in [-1, 1]:
                     for n in [-1, 1]:
-                        a, b = x + m * i - 10, y + n * j - 10
+                        a, b = x + m * i, y + n * j
                         if in_bounds(a, b) and self.obs.exploration[(a, b)] == -1:
                             return direction(pos, (a, b))
 
