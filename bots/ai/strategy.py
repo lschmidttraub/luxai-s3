@@ -9,8 +9,8 @@ class Strategy:
         self.relic_tile_mask: np.ndarray = np.zeros((24, 24)).astype(bool)
         self.relic_tile_probs: np.ndarray = np.zeros((24, 24))
 
-    def choose_action(self) -> list[list[int]]:
-        actions = [[0] * 3] * 16
+    def choose_action(self) -> np.ndarray:
+        actions = np.zeros((self.obs.params["max_units"], 3), dtype=int)
         units = self.obs.units
         relic_nodes = self.obs.relic_nodes
         vision = self.obs.vision
@@ -24,13 +24,15 @@ class Strategy:
                         m_dist = dist(pos, m_relic)
                 dirs = direction(pos, m_relic)
                 action = 0
-                if m_dist < 4:
+                if m_dist <= 4:
                     action = np.random.randint(0, 5)
                 elif vision[move(pos, dirs[0])] != ASTEROID_TILE:
                     action = dirs[0]
-                elif vision[move(pos, dirs[1])] == ASTEROID_TILE:
+                elif vision[move(pos, dirs[1])] != ASTEROID_TILE:
                     action = dirs[1]
                 actions[u_id][0] = action
+            else:
+                actions[u_id][0] = np.random.randint(0, 5)
 
         return actions
 

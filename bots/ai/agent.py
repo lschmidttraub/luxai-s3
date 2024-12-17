@@ -7,10 +7,9 @@ class Agent:
     def __init__(self, player: str, env_cfg):
         self.player = 0 if player == "player_0" else 1
         self.opp = ~self.player
-        self.env_cfg = env_cfg
-        self.observation = Observation()
+        self.observation = Observation(self.player, env_cfg)
         self.strategy = Strategy(self.observation)
 
     def act(self, step: int, obs, remainingOverageTime: int = 60):
-        self.observation.update_observation(obs)
+        self.observation.update_observation(step, obs)
         return self.strategy.choose_action()

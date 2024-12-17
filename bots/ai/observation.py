@@ -5,26 +5,27 @@ from utils import *
 
 
 class Observation:
-    def __init__(self):
+    def __init__(self, player: int, env_config: dict):
+        self.player = player
         self.step: int
-        self.pts: tuple[int, int] = (0,0)
-        self.pt_diff:tuple[int,int]
+        self.pts: tuple[int, int] = (0, 0)
+        self.pt_diff: tuple[int, int]
         self.player: int
         self.units: dict[int, tuple[tuple[int, int], int]] = {}
         self.enemy_units: dict[int, tuple[tuple[int, int], int]] = {}
-        self.energy: ma.MaskedArray
-        self.vision: np.ndarray
+        self.energy: ma.MaskedArray = ma.array(
+            np.zeros((24, 24)), mask=np.ones((24, 24)).astype(bool)
+        )
+        self.vision: np.ndarray = np.zeros((24, 24))
         self.exploration = np.full((24, 24), -1)
         # Relic nodes are the tiles on the map, whilst relic tiles are the map tiles that give points
         self.relic_tiles: list[tuple[int, int]] = []
         self.relic_nodes: list[tuple[int, int]] = []
         self.relic_tile_mask: np.ndarray = np.zeros((24, 24)).astype(bool)
-        self.params: dict[str, int] = {}
+        self.params: dict[str, int] = env_config
 
-    def update_observation(self, observations: dict) -> None:
-        self.step = observations["step"]
-        obs = observations["obs"]
-        self.player = 0 if obs["player"] == "player_1" else 1
+    def update_observation(self, step: int, obs: dict) -> None:
+        self.step = step
         units = obs["units"]
         unit_mask = obs["units_mask"]
         self.units = self.calc_units(
@@ -32,7 +33,7 @@ class Observation:
             units["energy"][self.player],
             unit_mask[self.player],
         )
-        opp = 1 - self.player
+        opp = ~self.player
         self.enemy_units = self.calc_units(
             units["position"][opp], units["energy"][opp], unit_mask[opp]
         )
@@ -52,9 +53,9 @@ class Observation:
             if m
         ]
         new_point = obs["team_points"]
-        
+
         pts = obs["team_points"]
-        self.pt_diff = pts-self.pts
+        self.pt_diff = pts - self.pts
         self.pts = pts
 
     def update_vis(self, new_tiles) -> None:

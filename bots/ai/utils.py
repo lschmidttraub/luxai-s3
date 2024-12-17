@@ -5,17 +5,17 @@ NEBULA_TILE = 1
 ASTEROID_TILE = 2
 
 CENTER = 0
-LEFT = 1
-DOWN = 2
-RIGHT = 3
-UP = 4
+LEFT = 4
+DOWN = 3
+RIGHT = 2
+UP = 1
 
 
 def match(old, mask, new) -> int:
     dirs = [0, 1, -1]
     for i in dirs:
         arr = np.roll(old, (i, -i), axis=(1, 0))
-        mask = old.mask | new.mask
+        mask = mask | new.mask
         mask[0, :] = True
         mask[-1, :] = True
         mask[:, 0] = True
@@ -37,9 +37,9 @@ def direction(f: tuple[int, int], t: tuple[int, int]) -> tuple[int, int]:
     xf, yf = f
     xt, yt = t
     dx, dy = xt - xf, yt - yf
-    xdir = 2 if dx > 0 else 4 if dx < 0 else 0
-    ydir = 3 if dy > 0 else 1 if dy < 0 else 0
-    if np.abs(xdir) > np.abs(ydir):
+    xdir = RIGHT if dx > 0 else LEFT if dx < 0 else 0
+    ydir = DOWN if dy > 0 else UP if dy < 0 else 0
+    if np.abs(dx) > np.abs(dy):
         return xdir, ydir
     return ydir, xdir
 
@@ -49,11 +49,11 @@ def move(pos: tuple[int, int], d: int) -> tuple[int, int]:
     if d == CENTER:
         return pos
     elif d == LEFT:
-        return x, y - 1
-    elif d == DOWN:
-        return x + 1, y
-    elif d == RIGHT:
-        return x, y + 1
-    elif d == UP:
         return x - 1, y
+    elif d == DOWN:
+        return x, y + 1
+    elif d == RIGHT:
+        return x + 1, y
+    elif d == UP:
+        return x, y - 1
     raise ValueError("Inputted and invalid direction")
