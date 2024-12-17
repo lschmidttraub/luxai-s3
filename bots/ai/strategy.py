@@ -71,5 +71,8 @@ class Strategy:
             return d[1]
         return 0
 
+    def sap_func(self, pos):
+        pass
+
     def eval(self) -> float:
         return 0

@@ -60,3 +60,6 @@ def move(pos: tuple[int, int], d: int) -> tuple[int, int]:
 
 def in_bounds(x: int, y: int) -> bool:
     return x >= 0 and y >= 0 and x < 24 and y < 24
+
+def shortest_path(pos:tuple[int,int], vision:np.ndarray)->list[tuple[int,int]]:
+    return []
