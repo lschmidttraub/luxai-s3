@@ -65,8 +65,8 @@ class Observation:
             # if squares shifted, change new row and column to unexplored
             self.exploration[-(i == 1), :] = -1
             self.exploration[:, -(i == -1)] = -1
-        mask = self.exploration != 0 | new_tiles.mask
-        self.vision = np.where(mask, self.vision, new_tiles)
+        mask = new_tiles.mask
+        self.vision = np.where(mask, self.vision, new_tiles.data)
 
     def calc_units(self, pos, energy, mask) -> dict[int, tuple[tuple[int, int], int]]:
         return {i: (p, e) for i, (m, p, e) in enumerate(zip(mask, pos, energy)) if m}

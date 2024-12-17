@@ -32,8 +32,6 @@ def dist(pos1: tuple[int, int], pos2: tuple[int, int]) -> int:
 
 
 def direction(f: tuple[int, int], t: tuple[int, int]) -> tuple[int, int]:
-    if f == t:
-        return 0, 0
     xf, yf = f
     xt, yt = t
     dx, dy = xt - xf, yt - yf
@@ -46,8 +44,9 @@ def direction(f: tuple[int, int], t: tuple[int, int]) -> tuple[int, int]:
 
 def move(pos: tuple[int, int], d: int) -> tuple[int, int]:
     x, y = pos
+    x, y = int(x), int(y)
     if d == CENTER:
-        return pos
+        return x, y
     elif d == LEFT:
         return x - 1, y
     elif d == DOWN:
@@ -56,4 +55,4 @@ def move(pos: tuple[int, int], d: int) -> tuple[int, int]:
         return x + 1, y
     elif d == UP:
         return x, y - 1
-    raise ValueError("Inputted and invalid direction")
+    raise ValueError("Invalid direction")

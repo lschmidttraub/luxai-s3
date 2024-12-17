@@ -23,16 +23,12 @@ class Strategy:
                         m_relic = relic
                         m_dist = dist(pos, m_relic)
                 dirs = direction(pos, m_relic)
-                action = 0
                 if m_dist <= 4:
-                    action = np.random.randint(0, 5)
-                elif vision[move(pos, dirs[0])] != ASTEROID_TILE:
-                    action = dirs[0]
-                elif vision[move(pos, dirs[1])] != ASTEROID_TILE:
-                    action = dirs[1]
-                actions[u_id][0] = action
+                    actions[u_id][0] = np.random.randint(0, 5)
+                else:
+                    actions[u_id][0] = self.choose_dir(pos, dirs)
             else:
-                actions[u_id][0] = np.random.randint(0, 5)
+                actions[u_id][0] = self.choose_dir(pos, self.explore_dir(pos))
 
         return actions
 
@@ -44,6 +40,22 @@ class Strategy:
             self.relic_tile_mask[pos1] = True
         if ~pt_diff[1]:
             self.relic_tile_mask[pos2] = True
+
+    def explore_dir(self, pos: tuple[int, int]) -> tuple[int, int]:
+        return direction(pos, (12, 12))
+
+    def choose_dir(self, pos: tuple[int, int], d: tuple[int, int]) -> int:
+        vision = self.obs.vision
+        if vision.shape != (24, 24):
+            raise Exception("graalhhh")
+        square = move(pos, d[0])
+        if not isinstance(square, tuple):
+            raise Exception("invalid move: ", square)
+        if vision[square] != ASTEROID_TILE:
+            return d[0]
+        elif vision[(0, 0)] != ASTEROID_TILE:
+            return d[1]
+        return 0
 
     def eval(self) -> float:
         return 0
