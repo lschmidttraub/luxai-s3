@@ -56,3 +56,7 @@ def move(pos: tuple[int, int], d: int) -> tuple[int, int]:
     elif d == UP:
         return x, y - 1
     raise ValueError("Invalid direction")
+
+
+def in_bounds(x: int, y: int) -> bool:
+    return x >= 0 and y >= 0 and x < 24 and y < 24

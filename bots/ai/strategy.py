@@ -42,6 +42,16 @@ class Strategy:
             self.relic_tile_mask[pos2] = True
 
     def explore_dir(self, pos: tuple[int, int]) -> tuple[int, int]:
+        nearest_unexplored = (12, 12)
+        x, y = pos
+        for i in range(10):
+            for j in range(10):
+                for m in [-1, 1]:
+                    for n in [-1, 1]:
+                        a, b = x + m * i - 10, y + n * j - 10
+                        if in_bounds(a, b) and self.obs.exploration[(a, b)] == -1:
+                            return direction(pos, (a, b))
+
         return direction(pos, (12, 12))
 
     def choose_dir(self, pos: tuple[int, int], d: tuple[int, int]) -> int:
