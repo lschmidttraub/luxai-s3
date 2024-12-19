@@ -1,2 +1,6 @@
 replay.html
 *.tar.gz
+__pycache__/
+*.pyc
+*.pyo
+
