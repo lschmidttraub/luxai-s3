@@ -1,4 +1,5 @@
 replay.html
+replay.json
 *.tar.gz
 __pycache__/
 *.pyc
