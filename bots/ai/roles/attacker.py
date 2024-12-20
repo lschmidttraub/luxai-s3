@@ -42,19 +42,16 @@ class Attacker(Unit):
                 actions[u_id][0] = self.choose_dir(pos, direction(pos, m_pos))
 
     def find_closest_energy_square(self, pos: tuple[int, int]) -> int:
-        W, H = self.obs.W, self.obs.H
-        x, y = pos
-        m_dist = max(W, H)
-        for d in range(m_dist):
-            for i in range(d + 1):
-                j = d + 1 - i
-                for m in [-1, 1]:
-                    for n in [-1, 1]:
-                        square = (x + m * i, y + n * j)
-                        if (
-                            in_bounds(square)
-                            and self.obs.exploration[square] == 0
-                            and self.obs.energy[square] > 0
-                        ):
-                            return self.choose_dir(pos, direction(pos, square))
-        return np.random.randint(0, 5)
+        m_dist = 0
+        m_pos = None
+        for idx in np.where(self.obs.energy > 0):
+            x, y = idx[0], idx[1]
+            d = dist(pos, (x, y))
+            if m_pos is None or d < m_dist:
+                m_dist = d
+                m_pos = (x, y)
+        if m_pos is None:
+            raise Exception(
+                "Assigned scout role when all squares were explored. explore ratio (Should have been checked earlier)"
+            )
+        return self.choose_dir(pos, direction(pos, m_pos))

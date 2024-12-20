@@ -27,8 +27,8 @@ def match(
             return i
     old.tofile("old.txt", sep=" ")
     new.tofile("new.txt", sep=" ")
-    old_mask.tofile("old_mask", sep=" ")
-    new_mask.tofile("new_mask", sep=" ")
+    old_mask.tofile("old_mask.txt", sep=" ")
+    new_mask.tofile("new_mask.txt", sep=" ")
     raise Exception("No matching shift")
 
 
