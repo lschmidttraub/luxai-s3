@@ -12,18 +12,24 @@ UP = 1
 SAP = 5
 
 
-def match(old, mask, new) -> int:
-    dirs = [0, 1, -1]
-    for i in dirs:
+def match(
+    old: np.ndarray, old_mask: np.ndarray, new: np.ndarray, new_mask: np.ndarray
+) -> int:
+    for i in range(-1, 2):
         arr = np.roll(old, (i, -i), axis=(1, 0))
-        mask = mask | new.mask
-        mask[0, :] = True
-        mask[-1, :] = True
-        mask[:, 0] = True
-        mask[:, -1] = True
-        if np.all(arr[~mask] == new[~mask]):
+        mask = np.roll(old_mask, (i, -i), axis=(1, 0))
+        mask = mask & new_mask
+        mask[0, :] = False
+        mask[-1, :] = False
+        mask[:, 0] = False
+        mask[:, -1] = False
+        if np.all(arr[mask] == new[mask]):
             return i
-    return 0
+    old.tofile("old.txt", sep=" ")
+    new.tofile("new.txt", sep=" ")
+    old_mask.tofile("old_mask", sep=" ")
+    new_mask.tofile("new_mask", sep=" ")
+    raise Exception("No matching shift")
 
 
 def dist(pos1: tuple[int, int], pos2: tuple[int, int]) -> int:
@@ -59,8 +65,10 @@ def move(pos: tuple[int, int], d: int) -> tuple[int, int]:
     raise ValueError("Invalid direction")
 
 
-def in_bounds(x: int, y: int) -> bool:
-    return x >= 0 and y >= 0 and x < 24 and y < 24
+def in_bounds(square: tuple[int, int]) -> bool:
+    x, y = square
+    return 0 <= x < 24 and 0 <= y < 24
 
-def shortest_path(pos:tuple[int,int], vision:np.ndarray)->list[tuple[int,int]]:
+
+def shortest_path(pos: tuple[int, int], vision: np.ndarray) -> list[tuple[int, int]]:
     return []

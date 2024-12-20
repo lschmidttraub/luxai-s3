@@ -4,6 +4,7 @@ from utils import *
 from roles.scout import Scout
 from roles.attacker import Attacker
 from roles.miner import Miner
+from roles.unit import Unit
 
 
 class Strategy:
@@ -13,34 +14,19 @@ class Strategy:
         self.relic_tile_mask: np.ndarray = np.zeros((W, H)).astype(bool)
         self.relic_tile_probs: np.ndarray = np.zeros((W, H))
         # create arrays of different roles
-        self.scouts: list[int] = []
-        self.attackers: list[int] = []
-        self.miners: list[int] = []
-        self.unit_strats = dict
+        self.unit_roles: dict = {
+            "scout": Scout(self.obs),
+            "attacker": Attacker(self.obs),
+            "miner": Miner(self.obs),
+        }
         self.all_relics_discovered = False
 
     def choose_action(self) -> np.ndarray:
-        units = self.obs.units
-        relic_nodes = self.obs.relic_nodes
-        vision = self.obs.vision
-        actions = self.choose_sap()
-        for u_id, (pos, energy) in units.items():
-            if actions[u_id][0]:
-                continue
-            if len(relic_nodes) > 0:
-                m_relic = next(iter(relic_nodes))
-                m_dist = 100
-                for relic in relic_nodes:
-                    if dist(pos, relic) < m_dist:
-                        m_relic = relic
-                        m_dist = dist(pos, m_relic)
-                dirs = direction(pos, m_relic)
-                if m_dist <= 4:
-                    actions[u_id][0] = np.random.randint(0, 5)
-                else:
-                    actions[u_id][0] = self.choose_dir(pos, dirs)
-            else:
-                actions[u_id][0] = self.choose_dir(pos, self.explore_dir(pos))
+        self.update_roles()
+        actions = np.zeros((self.obs.max_units, 3), dtype=int)
+        self.unit_roles["scout"].choose_action(actions)
+        self.unit_roles["attacker"].choose_action(actions)
+        self.unit_roles["miner"].choose_action(actions)
 
         return actions
 
@@ -63,9 +49,9 @@ class Strategy:
                 j = d + 1 - i
                 for m in [-1, 1]:
                     for n in [-1, 1]:
-                        a, b = x + m * i, y + n * j
-                        if in_bounds(a, b) and self.obs.exploration[(a, b)] == -1:
-                            return direction(pos, (a, b))
+                        square = (x + m * i, y + n * j)
+                        if in_bounds(square) and self.obs.exploration[square] == -1:
+                            return direction(pos, square)
 
         return direction(pos, nearest_unexplored)
 
@@ -75,9 +61,9 @@ class Strategy:
             raise Exception("graalhhh")
         sq1 = move(pos, d[0])
         sq2 = move(pos, d[1])
-        if in_bounds(sq1[0], sq1[1]) and vision[sq1] != ASTEROID_TILE:
+        if in_bounds(sq1) and vision[sq1] != ASTEROID_TILE:
             return d[0]
-        elif in_bounds(sq2[0], sq2[1]) and vision[sq2] != ASTEROID_TILE:
+        elif in_bounds(sq2) and vision[sq2] != ASTEROID_TILE:
             return d[1]
         return 0
 
@@ -101,34 +87,61 @@ class Strategy:
             self.all_relics_discovered = True
 
         n_units = len(self.obs.units)
-        n_scouts = 0 if self.all_relics_discovered else n_units // 3
-        n_attackers = n_units // 3
+        if not n_units:
+            self.unit_roles["scout"].update_units([])
+            self.unit_roles["attacker"].update_units([])
+            self.unit_roles["miner"].update_units([])
+            return
+
+        # these formulas are probably super shitty, need to improve
+        scout_prop = self.obs.undiscovered_count() / (self.obs.H * self.obs.W)
+        attacker_prop = len(self.obs.enemy_units) / n_units * 1 / 3
+        miner_prop = (
+            (len(self.obs.relic_nodes) + len(self.obs.relic_tiles))
+            * 1
+            / self.obs.max_units
+        )
+        total = scout_prop + attacker_prop + miner_prop
+        scout_prop /= total
+        attacker_prop /= total
+        miner_prop /= total
+
+        # rounding products to the nearest integer (instead of rounding down) helps us
+        # avoid the edge case where n_miners = 1 but no relic nodes have been discovered (inshallah)
+        n_scouts = int(round(n_units * scout_prop))
+        n_attackers = int(round(n_units * attacker_prop))
         n_miners = n_units - n_scouts - n_attackers
 
+        scouts = self.unit_roles["scout"].units
+        attackers = self.unit_roles["attacker"].units
+        miners = self.unit_roles["miner"].units
+
         def remove_dead_units(l, expected_length):
-            for i, item in enumerate(l):
-                if not item in l:
-                    self.scouts.remove(i)
+            for u_id in l:
+                if not u_id in self.obs.units:
+                    l.remove(u_id)
 
             while len(l) > expected_length:
-                l.remove(-1)
+                l.pop(-1)
 
-        remove_dead_units(self.scouts, n_scouts)
-        remove_dead_units(self.attackers, n_attackers)
-        remove_dead_units(self.miners, n_miners)
+        remove_dead_units(scouts, n_scouts)
+        remove_dead_units(attackers, n_attackers)
+        remove_dead_units(miners, n_miners)
 
         def add_new_units(l, expected_length):
             for u_id in self.obs.units:
                 if len(l) == expected_length:
                     return
-                if not (
-                    u_id in self.scouts or u_id in self.attackers or u_id in self.miners
-                ):
+                if not (u_id in scouts or u_id in attackers or u_id in miners):
                     l.append(u_id)
 
-        add_new_units(self.scouts, n_scouts)
-        add_new_units(self.attackers, n_attackers)
-        add_new_units(self.miners, n_miners)
+        add_new_units(scouts, n_scouts)
+        add_new_units(attackers, n_attackers)
+        add_new_units(miners, n_miners)
+
+        self.unit_roles["scout"].update_units(scouts)
+        self.unit_roles["attacker"].update_units(attackers)
+        self.unit_roles["miner"].update_units(miners)
 
     def eval(self) -> float:
         return 0
