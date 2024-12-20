@@ -33,6 +33,9 @@ class Observation:
         self.relic_nodes: set[tuple[int, int]]
         self.relic_tile_mask: np.ndarray = np.zeros((self.W, self.H)).astype(bool)
 
+        self.drift_steps = 0
+        self.drift_dir = 0
+
     def update_observation(self, step: int, obs: dict) -> None:
         self.step = step
         units = obs["units"]
@@ -68,12 +71,23 @@ class Observation:
         self.pts = pts
 
     def update_vis(self, new_tiles) -> None:
-        i = match(self.vision, self.exploration != 0, new_tiles)
-        self.vision = np.roll(self.vision.data, (i, -i), axis=(1, 0))
-        if i:
-            # if squares shifted, change new row and column to unexplored
-            self.exploration[-(i == 1), :] = -1
-            self.exploration[:, -(i == -1)] = -1
+        if ~self.drift_steps and (self.step == 21 or self.step == 41):
+            i = match(self.vision, self.exploration != 0, new_tiles)
+            if i:
+                self.drift_steps = self.step - 1
+                self.drift_dir = i
+        elif self.drift_steps:
+            if self.step % self.drift_steps == 1:
+                self.vision = np.roll(
+                    self.vision.data, (self.drift_dir, -self.drift_dir), axis=(1, 0)
+                )
+                # if squares shifted, change new row and column to unexplored
+                if self.drift_dir == -1:
+                    self.exploration[-1, :] = -1
+                    self.exploration[:, 0] = -1
+                elif self.drift_dir == 1:
+                    self.exploration[0, :] = -1
+                    self.exploration[:, -1] = -1
         mask = new_tiles.mask
         self.vision = np.where(mask, self.vision, new_tiles.data)
 
@@ -83,3 +97,14 @@ class Observation:
     def update_exploration(self, vision_mask) -> None:
         self.exploration = self.exploration + (self.exploration != -1)
         self.exploration[vision_mask] = 0
+
+    def found_all_relics(self) -> bool:
+        if len(self.units)==self.max_units:
+            return True
+        for i in range(self.W):
+            for j in range(i,self.H):
+                if not(self.exploration[i][j] or self.exploration[j][i]):
+                    return False
+        return True
+
+

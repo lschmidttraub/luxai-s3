@@ -1,6 +1,9 @@
 import numpy as np
 from observation import Observation
 from utils import *
+from roles.scout import Scout
+from roles.attacker import Attacker
+from roles.miner import Miner
 
 
 class Strategy:
@@ -9,13 +12,21 @@ class Strategy:
         H, W = self.obs.H, self.obs.W
         self.relic_tile_mask: np.ndarray = np.zeros((W, H)).astype(bool)
         self.relic_tile_probs: np.ndarray = np.zeros((W, H))
+        # create arrays of different roles
+        self.scouts: list[int] = []
+        self.attackers: list[int] = []
+        self.miners: list[int] = []
+        self.unit_strats = dict
+        self.all_relics_discovered = False
 
     def choose_action(self) -> np.ndarray:
-        actions = np.zeros((self.obs.max_units, 3), dtype=int)
         units = self.obs.units
         relic_nodes = self.obs.relic_nodes
         vision = self.obs.vision
+        actions = self.choose_sap()
         for u_id, (pos, energy) in units.items():
+            if actions[u_id][0]:
+                continue
             if len(relic_nodes) > 0:
                 m_relic = next(iter(relic_nodes))
                 m_dist = 100
@@ -56,23 +67,68 @@ class Strategy:
                         if in_bounds(a, b) and self.obs.exploration[(a, b)] == -1:
                             return direction(pos, (a, b))
 
-        return direction(pos, (12, 12))
+        return direction(pos, nearest_unexplored)
 
     def choose_dir(self, pos: tuple[int, int], d: tuple[int, int]) -> int:
         vision = self.obs.vision
         if vision.shape != (24, 24):
             raise Exception("graalhhh")
-        square = move(pos, d[0])
-        if not isinstance(square, tuple):
-            raise Exception("invalid move: ", square)
-        if vision[square] != ASTEROID_TILE:
+        sq1 = move(pos, d[0])
+        sq2 = move(pos, d[1])
+        if in_bounds(sq1[0], sq1[1]) and vision[sq1] != ASTEROID_TILE:
             return d[0]
-        elif vision[(0, 0)] != ASTEROID_TILE:
+        elif in_bounds(sq2[0], sq2[1]) and vision[sq2] != ASTEROID_TILE:
             return d[1]
         return 0
 
-    def sap_func(self, pos):
-        pass
+    def choose_sap(self) -> np.ndarray:
+        actions = np.zeros((self.obs.max_units, 3), dtype=int)
+        units_in_range = [[]] * self.obs.max_units
+        # attackers = [[]] * self.obs.max_units
+        for u_id, (pos, energy) in self.obs.units.items():
+            if energy < self.obs.sap_cost:
+                continue
+            for e_id, (e_pos, e_energy) in self.obs.enemy_units.items():
+                if dist(e_pos, pos) <= self.obs.sap_range:
+                    actions[u_id] = [5, e_pos[0], e_pos[1]]
+                    # units_in_range[u_id].append(e_pos)
+                    # attackers[e_id].append(u_id)
+
+        return actions
+
+    def update_roles(self):
+        if not self.all_relics_discovered and self.obs.found_all_relics():
+            self.all_relics_discovered = True
+
+        n_units = len(self.obs.units)
+        n_scouts = 0 if self.all_relics_discovered else n_units // 3
+        n_attackers = n_units // 3
+        n_miners = n_units - n_scouts - n_attackers
+
+        def remove_dead_units(l, expected_length):
+            for i, item in enumerate(l):
+                if not item in l:
+                    self.scouts.remove(i)
+
+            while len(l) > expected_length:
+                l.remove(-1)
+
+        remove_dead_units(self.scouts, n_scouts)
+        remove_dead_units(self.attackers, n_attackers)
+        remove_dead_units(self.miners, n_miners)
+
+        def add_new_units(l, expected_length):
+            for u_id in self.obs.units:
+                if len(l) == expected_length:
+                    return
+                if not (
+                    u_id in self.scouts or u_id in self.attackers or u_id in self.miners
+                ):
+                    l.append(u_id)
+
+        add_new_units(self.scouts, n_scouts)
+        add_new_units(self.attackers, n_attackers)
+        add_new_units(self.miners, n_miners)
 
     def eval(self) -> float:
         return 0

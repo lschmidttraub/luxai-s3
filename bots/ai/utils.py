@@ -9,6 +9,7 @@ LEFT = 4
 DOWN = 3
 RIGHT = 2
 UP = 1
+SAP = 5
 
 
 def match(old, mask, new) -> int:
