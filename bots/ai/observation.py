@@ -25,7 +25,7 @@ class Observation:
         self.units: dict[int, tuple[tuple[int, int], int]] = {}
         self.enemy_units: dict[int, tuple[tuple[int, int], int]] = {}
         self.energy: np.ndarray = np.zeros((self.W, self.H), dtype=int)
-        self.vision: np.ndarray = np.zeros((self.W, self.H), dtype=int)
+        self.vision: np.ndarray = np.full((self.W, self.H), -1, dtype=int)
         self.exploration: np.ndarray = np.full((self.W, self.H), -1)
         # Relic nodes are the tiles on the map, whilst relic tiles are the map tiles that give points
         self.relic_tiles: set[tuple[int, int]] = set({})
@@ -66,15 +66,18 @@ class Observation:
         self.pts = pts
 
     def update_vis(self, new_tiles, new_mask) -> None:
-        if ~self.drift_steps and (self.step == 20 or self.step == 40):
+        if ~self.drift_steps and (self.step == 21 or self.step == 41):
             i = match(self.vision, self.exploration == 0, new_tiles, new_mask)
             if i:
-                self.drift_steps = self.step
+                self.drift_steps = self.step - 1
                 self.drift_dir = i
-        elif self.drift_steps:
-            if self.step % self.drift_steps == 0:
+        if self.drift_steps:
+            if self.step % self.drift_steps == 1:
                 self.vision = np.roll(
                     self.vision, (self.drift_dir, -self.drift_dir), axis=(1, 0)
+                )
+                self.exploration = np.roll(
+                    self.exploration, (self.drift_dir, -self.drift_dir), axis=(1, 0)
                 )
                 # if squares shifted, change new row and column to unexplored
                 if self.drift_dir == 1:
@@ -83,9 +86,15 @@ class Observation:
                 elif self.drift_dir == -1:
                     self.exploration[0, :] = -1
                     self.exploration[:, -1] = -1
-                joined_mask = self.exploration == 0 & new_mask
+                joined_mask = np.logical_and(self.exploration == 0, new_mask)
                 if not np.all(self.vision[joined_mask] == new_tiles[joined_mask]):
-                    raise Exception("Discrepancy between predicted and real shift")
+                    tofile("vision.txt", self.vision)
+                    tofile("new.txt", new_tiles)
+                    tofile("mask.txt", joined_mask)
+                    tofile("sensor.txt", new_mask)
+                    tofile("exploration.txt", self.exploration)
+
+                    raise Exception("Discrepancy between predicted and observed shift")
         self.vision = np.where(new_mask, new_tiles, self.vision)
 
     def calc_units(self, pos, energy, mask) -> dict[int, tuple[tuple[int, int], int]]:

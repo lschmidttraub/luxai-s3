@@ -18,11 +18,13 @@ def match(
     for i in range(-1, 2):
         arr = np.roll(old, (i, -i), axis=(1, 0))
         mask = np.roll(old_mask, (i, -i), axis=(1, 0))
-        mask = mask & new_mask
-        mask[0, :] = False
-        mask[-1, :] = False
-        mask[:, 0] = False
-        mask[:, -1] = False
+        if i == -1:
+            mask[-1, :] = False
+            mask[:, 0] = False
+        if i == -1:
+            mask[0, :] = False
+            mask[:, -1] = False
+        mask = np.logical_and(mask, new_mask)
         if np.all(arr[mask] == new[mask]):
             return i
     old.tofile("old.txt", sep=" ")
@@ -68,6 +70,10 @@ def move(pos: tuple[int, int], d: int) -> tuple[int, int]:
 def in_bounds(square: tuple[int, int]) -> bool:
     x, y = square
     return 0 <= x < 24 and 0 <= y < 24
+
+
+def tofile(filename: str, arr: np.ndarray):
+    np.savetxt(filename, arr, fmt="%s")
 
 
 def shortest_path(pos: tuple[int, int], vision: np.ndarray) -> list[tuple[int, int]]:

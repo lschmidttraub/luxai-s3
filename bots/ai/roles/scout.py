@@ -30,4 +30,4 @@ class Scout(Unit):
             raise Exception(
                 "Assigned scout role when all squares were explored. explore ratio (Should have been checked earlier)"
             )
-        return m_pos
+        return direction(pos, m_pos)

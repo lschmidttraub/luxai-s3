@@ -39,26 +39,8 @@ class Strategy:
         if ~pt_diff[1]:
             self.relic_tile_mask[pos2] = True
 
-    def explore_dir(self, pos: tuple[int, int]) -> tuple[int, int]:
-        W, H = self.obs.W, self.obs.H
-        nearest_unexplored = (W // 2, H // 2)
-        x, y = pos
-        m_dist = max(W, H)
-        for d in range(m_dist):
-            for i in range(d + 1):
-                j = d + 1 - i
-                for m in [-1, 1]:
-                    for n in [-1, 1]:
-                        square = (x + m * i, y + n * j)
-                        if in_bounds(square) and self.obs.exploration[square] == -1:
-                            return direction(pos, square)
-
-        return direction(pos, nearest_unexplored)
-
     def choose_dir(self, pos: tuple[int, int], d: tuple[int, int]) -> int:
         vision = self.obs.vision
-        if vision.shape != (24, 24):
-            raise Exception("graalhhh")
         sq1 = move(pos, d[0])
         sq2 = move(pos, d[1])
         if in_bounds(sq1) and vision[sq1] != ASTEROID_TILE:
@@ -66,21 +48,6 @@ class Strategy:
         elif in_bounds(sq2) and vision[sq2] != ASTEROID_TILE:
             return d[1]
         return 0
-
-    def choose_sap(self) -> np.ndarray:
-        actions = np.zeros((self.obs.max_units, 3), dtype=int)
-        units_in_range = [[]] * self.obs.max_units
-        # attackers = [[]] * self.obs.max_units
-        for u_id, (pos, energy) in self.obs.units.items():
-            if energy < self.obs.sap_cost:
-                continue
-            for e_id, (e_pos, e_energy) in self.obs.enemy_units.items():
-                if dist(e_pos, pos) <= self.obs.sap_range:
-                    actions[u_id] = [5, e_pos[0], e_pos[1]]
-                    # units_in_range[u_id].append(e_pos)
-                    # attackers[e_id].append(u_id)
-
-        return actions
 
     def update_roles(self):
         if not self.all_relics_discovered and self.obs.found_all_relics():
@@ -95,12 +62,10 @@ class Strategy:
 
         # these formulas are probably super shitty, need to improve
         scout_prop = self.obs.undiscovered_count() / (self.obs.H * self.obs.W)
-        attacker_prop = len(self.obs.enemy_units) / n_units * 1 / 3
+        attacker_prop = len(self.obs.enemy_units) / n_units
         miner_prop = (
-            (len(self.obs.relic_nodes) + len(self.obs.relic_tiles))
-            * 1
-            / self.obs.max_units
-        )
+            len(self.obs.relic_nodes) + len(self.obs.relic_tiles)
+        ) / self.obs.max_units
         total = scout_prop + attacker_prop + miner_prop
         scout_prop /= total
         attacker_prop /= total
