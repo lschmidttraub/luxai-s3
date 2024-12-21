@@ -28,6 +28,7 @@ class Strategy:
         self.unit_roles["attacker"].choose_action(actions)
         self.unit_roles["miner"].choose_action(actions)
 
+        tofile("actions.txt", actions)
         return actions
 
     def update_potential_relic_tiles(self):
@@ -107,6 +108,8 @@ class Strategy:
         self.unit_roles["scout"].update_units(scouts)
         self.unit_roles["attacker"].update_units(attackers)
         self.unit_roles["miner"].update_units(miners)
+        with open("log.txt", "w") as log:
+            log.write(f"{scouts}, {attackers}, {miners}")
 
     def eval(self) -> float:
         return 0

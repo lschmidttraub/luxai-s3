@@ -14,20 +14,26 @@ class Scout(Unit):
                 self.obs.undiscovered_count(),
             )
         for u_id in self.units:
-            pos, energy = self.obs.units[int(u_id)]
-            actions[u_id][0] = self.choose_dir(pos, self.explore_dir(pos))
+            pos, energy = self.obs.units[u_id]
+            dirs = direction(pos, self.closest_unexplored(pos))
+            # with open("scout_actions.txt", "a") as file:
+            #   file.write(str(dirs) + "\n")
+            actions[u_id][0] = self.choose_dir(pos, dirs)
 
-    def explore_dir(self, pos: tuple[int, int]) -> tuple[int, int]:
+    def closest_unexplored(self, pos: tuple[int, int]) -> tuple[int, int]:
         m_dist = 0
         m_pos = None
-        for idx in np.where(self.obs.exploration == -1):
-            x, y = idx[0], idx[1]
+        # This could maybe be done more efficiently, but you usually want to
+        # avoid for loops in python
+        for idx in np.dstack(np.where(self.obs.exploration == -1))[0]:
+            x, y = int(idx[0]), int(idx[1])
             d = dist(pos, (x, y))
-            if m_pos is None or d < m_dist:
+            # if unexplored unit is in sensor range, it is a nenula tile and should be ignored
+            if m_pos is None or self.obs.sensor_range < d < m_dist:
                 m_dist = d
                 m_pos = (x, y)
         if m_pos is None:
             raise Exception(
                 "Assigned scout role when all squares were explored. explore ratio (Should have been checked earlier)"
             )
-        return direction(pos, m_pos)
+        return m_pos
