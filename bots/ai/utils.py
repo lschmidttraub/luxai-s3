@@ -3,6 +3,7 @@ import numpy as np
 EMPTY_TILE = 0
 NEBULA_TILE = 1
 ASTEROID_TILE = 2
+UNKNOWN = -1
 
 CENTER = 0
 LEFT = 4
