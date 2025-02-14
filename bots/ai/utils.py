@@ -152,9 +152,14 @@ class Utils:
         np.savetxt(filename, arr, fmt="%s")
 
     @staticmethod
-    def poisson(P: np.ndarray, k: int) -> np.ndarray:
+    def poisson(P: np.ndarray, k: int):
+        """
+        returns probabilities of getting k given the i-th entry being positive for each 0<=i<n 
+        as well as probability of getting exactly k positive results
+
+        """
         n = len(P)
-        DP = np.zeros((n + 1, n, k + 1), dtype=int)
+        DP = np.zeros((n + 1, n + 1, k + 1), dtype=int)
         DP[0, 0] = 1
         for i in range(1, n + 1):
             for j in range(0, n):
@@ -165,12 +170,18 @@ class Utils:
                         DP[i, j, l] = (
                             DP[i - 1, j, l] * (1 - P[i]) + DP[i - 1, j, l - 1] * P[i]
                         )
-        return DP[n, :, k - 1]
+        return DP[n, n, k], DP[n, :, k - 1]
 
     @staticmethod
     def bernoulli(p: float, k: int, n: int) -> float:
+        """
+        Return the probability of get k in a binomial distribution with n runs
+        """
         return math.comb(n, k) * p**k * (1 - p) ** (n - k)
 
     @staticmethod
-    def bayes(a: np.ndarray, b: float, b_given_a: np.ndarray) -> np.ndarray:
+    def bayes(a, b, b_given_a):
+        """
+        Bayes formula
+        """
         return b_given_a * a / b

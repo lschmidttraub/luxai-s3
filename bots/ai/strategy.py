@@ -92,8 +92,8 @@ class Strategy:
         Poisson's formula
         """
         P = self.relic_tile_probs[positions]
-        b_given_a = Utils.poisson(P, k)
-        probs = Utils.bayes(P, 1, b_given_a)
+        b, b_given_a = Utils.poisson(P, k)
+        probs = Utils.bayes(P, b, b_given_a)
         self.relic_tile_probs[positions] = probs
         for pos, prob in zip(positions, probs):
             self.update_prob(pos, prob)
