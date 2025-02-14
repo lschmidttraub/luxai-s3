@@ -3,6 +3,7 @@ This file provides important constants, as well as the Utils class, which bundle
 """
 
 import numpy as np
+import math
 
 # Set this to False when shipping
 DEBUG = True
@@ -111,6 +112,21 @@ class Utils:
         return 0 <= x < 24 and 0 <= y < 24
 
     @staticmethod
+    def symmetric(pos: tuple[int, int]):
+        """
+        Returns the position symmetric to pos relative to the board's axis of symmetry
+        """
+        x, y = pos
+        return (23 - y, 23 - x)
+
+    @staticmethod
+    def add_sym(pos: list[tuple[int, int]]) -> list[tuple[int, int]]:
+        """
+        Adds the symmetric images of each position to the list and removes duplicates
+        """
+        return list(set(pos + list(map(Utils.symmetric, pos))))
+
+    @staticmethod
     def squared_dist(f: tuple[int, int], t: tuple[int, int]) -> int:
         """
         Returns the squared Euclidean distance between two points
@@ -120,8 +136,41 @@ class Utils:
         return (xt - xf) ** 2 + (yt - yf) ** 2
 
     @staticmethod
+    def prob_mult(a: float, b: float) -> float:
+        """
+        Combines the probabilities of two overlapping relic tiles, by multiplying the probability that
+        the tile isn't a relic tiles in both areas to find the new probability that the tile isn't a relic
+        tile (this way we never get probabilities over 1)
+        """
+        return 1 - (1 - a) * (1 - b)
+
+    @staticmethod
     def tofile(filename: str, arr: np.ndarray):
         """
         Debug function used to save a numpy array to a file
         """
         np.savetxt(filename, arr, fmt="%s")
+
+    @staticmethod
+    def poisson(P: np.ndarray, k: int) -> np.ndarray:
+        n = len(P)
+        DP = np.zeros((n + 1, n, k + 1), dtype=int)
+        DP[0, 0] = 1
+        for i in range(1, n + 1):
+            for j in range(0, n):
+                for l in range(0, k):
+                    if i == j:
+                        DP[i, j, l] = DP[i - 1, j, l]
+                    else:
+                        DP[i, j, l] = (
+                            DP[i - 1, j, l] * (1 - P[i]) + DP[i - 1, j, l - 1] * P[i]
+                        )
+        return DP[n, :, k - 1]
+
+    @staticmethod
+    def bernoulli(p: float, k: int, n: int) -> float:
+        return math.comb(n, k) * p**k * (1 - p) ** (n - k)
+
+    @staticmethod
+    def bayes(a: np.ndarray, b: float, b_given_a: np.ndarray) -> np.ndarray:
+        return b_given_a * a / b

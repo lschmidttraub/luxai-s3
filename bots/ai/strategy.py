@@ -15,8 +15,10 @@ class Strategy:
     def __init__(self, observation: Observation):
         self.obs = observation
         H, W = self.obs.H, self.obs.W
-        self.relic_tile_mask: np.ndarray = np.zeros((W, H)).astype(bool)
-        self.relic_tile_probs: np.ndarray = np.zeros((W, H))
+        # Maintain an mask array that shows all potential relic tiles
+        # I think the best way of doing this to maintain an array of probabilities
+        self.base = 0.025
+        self.relic_tile_probs: np.ndarray = np.full((W, H), self.base)
         # create arrays of different roles
         self.unit_roles: dict = {
             "scout": Scouts(self.obs),
@@ -44,13 +46,57 @@ class Strategy:
         Used to track which tiles could potentially be relic tiles (i.e. which tiles give points)
         INCOMPLETE
         """
+        # We assume that on average 5 relic tiles spawn for each relic node, and that the spawn
+        # radius is 2 in maximum (Chebyshev) distance
+        # This means that each tile in the vicinity of a relic node initialy has a 1/5 chance of being a relic tile
+        # We can also make a rough estimate of the area covered by relic nodes:
+        # Assuming, on average, 4 relic nodes (k ranges from 1 to 3), we can estimate the average covered area at 1/8 (100/576 + potential overlap),
+        # which explains the starting probability of 0.025
+        for tile in self.obs.new_explored_tiles:
+            if tile in self.obs.relic_nodes:
+                x, y = tile
+                count = 25
+                mask = [
+                    (i, j) for i in range(x - 2, x + 3) for j in range(y - 2, y + 3)
+                ]
+                for pos in mask:
+                    if not Utils.in_bounds(pos) or not self.relic_tile_probs[pos]:
+                        count -= 1
+                # we must increase the probability of each neihbour by a certain factor
+                # we add a little over 4 to the divisor so that in the base case where only 1 tile has a non-zero probability, we still don't get a probability over 1
+                prob = 5 / (count + 4)
+                for pos in mask:
+                    if Utils.in_bounds(pos) and self.relic_tile_probs[pos]:
+                        self.update_prob(
+                            pos, Utils.prob_mult(self.relic_tile_probs[pos], prob)
+                        )
+
         pt_diff = self.obs.pt_diff
-        pos1 = [pos for _, (pos, e) in self.obs.units.items()]
-        pos2 = [pos for _, (pos, e) in self.obs.enemy_units.items()]
-        if ~pt_diff[0]:
-            self.relic_tile_mask[pos1] = True
-        if ~pt_diff[1]:
-            self.relic_tile_mask[pos2] = True
+        # since the map is symmetric, we always add a position as well as its corresponding image
+
+        pos1 = [p for _, (p, _) in self.obs.units.items()]
+        pos2 = [p for _, (p, _) in self.obs.enemy_units.items()]
+        self.update_visited_probs(pos1, pt_diff[0])
+        self.update_visited_probs(pos2, pt_diff[1])
+
+    def update_prob(self, pos: tuple[int, int], new_prob: float) -> None:
+        """
+        Updates the probability of the corresponding tile, as well as its symmetric image
+        """
+        self.relic_tile_probs[pos] = new_prob
+        self.relic_tile_probs[Utils.symmetric(pos)] = new_prob
+
+    def update_visited_probs(self, positions: list[tuple[int, int]], k: int) -> None:
+        """
+        updates the probabilities of the squares visited by units using Bayes formula and a variation of
+        Poisson's formula
+        """
+        P = self.relic_tile_probs[positions]
+        b_given_a = Utils.poisson(P, k)
+        probs = Utils.bayes(P, 1, b_given_a)
+        self.relic_tile_probs[positions] = probs
+        for pos, prob in zip(positions, probs):
+            self.update_prob(pos, prob)
 
     def update_roles(self) -> None:
         """

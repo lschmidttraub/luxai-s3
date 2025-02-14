@@ -45,6 +45,8 @@ class Observation:
         self.drift_steps = 0
         # Either 0(no motion), 1(towards top-right), -1(towards bottom-left)
         self.drift_dir = 0
+        # List of all positions that have been newly explored
+        self.new_explored_tiles = []
 
     def update_observation(self, step: int, obs: dict) -> None:
         """
@@ -150,11 +152,14 @@ class Observation:
 
     def update_exploration(self, vision_mask, vision) -> None:
         """
-        Updates the exploration attribute of the Observation class
+        Updates the exploration attribute of the Observation class as well as the new_explored_tiles attribute
         Has to be called after the vision is updated
         """
         # Increment the time since exploration all tiles that have already been explored by one
         self.exploration = self.exploration + (self.exploration != -1)
+        self.new_explored_tiles = np.where(
+            np.logical_and(vision_mask, self.exploration == UNKNOWN)
+        )
         # Set the time since exploration of all tiles currently seen to 0
         # It is important to remember that nebula tiles aren't counted as explored:
         # we don't know what's underneath them
