@@ -1,3 +1,6 @@
+"""
+BOILERPLATE CODE
+"""
 import numpy as np
 from strategy import Strategy
 from observation import Observation
