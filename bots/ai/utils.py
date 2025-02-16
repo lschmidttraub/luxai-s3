@@ -26,7 +26,7 @@ SAP = 5
 
 class Utils:
     @staticmethod
-    def match(
+    def match_shift(
         old: np.ndarray, old_mask: np.ndarray, new: np.ndarray, new_mask: np.ndarray
     ) -> int:
         """
@@ -66,6 +66,44 @@ class Utils:
         x1, y1 = pos1
         x2, y2 = pos2
         return np.abs(x1 - x2) + np.abs(y1 - y2)
+
+    @staticmethod
+    def squared_dist(f: tuple[int, int], t: tuple[int, int]) -> int:
+        """
+        Returns the squared Euclidean distance between two points
+        """
+        xf, yf = f
+        xt, yt = t
+        return (xt - xf) ** 2 + (yt - yf) ** 2
+
+    @staticmethod
+    def euclidean_dist(f: tuple[int, int], t: tuple[int, int]) -> float:
+        """
+        Returns the Euclidean distance
+        """
+        return math.sqrt(Utils.squared_dist(f, t))
+
+    @staticmethod
+    def max_dist(f: tuple[int, int], t: tuple[int, int]) -> int:
+        """
+        Return the Chebyshev distance between two points
+        """
+        xf, yf = f
+        xt, yt = t
+        return max(np.abs(xf - xt), np.abs(yf - yt))
+
+    @staticmethod
+    def position_mask(pos: tuple[int, int], radius: int):
+        """
+        returns an array of all positions in a mask of width 2*radius+1 centered around pos
+        """
+        x, y = pos
+        return [
+            (i, j)
+            for i in range(y - radius, y + radius + 1)
+            for j in range(x - radius, x + radius + 1)
+            if Utils.in_bounds((i, j))
+        ]
 
     @staticmethod
     def direction(f: tuple[int, int], t: tuple[int, int]) -> tuple[int, int]:
@@ -127,13 +165,19 @@ class Utils:
         return list(set(pos + list(map(Utils.symmetric, pos))))
 
     @staticmethod
-    def squared_dist(f: tuple[int, int], t: tuple[int, int]) -> int:
-        """
-        Returns the squared Euclidean distance between two points
-        """
-        xf, yf = f
-        xt, yt = t
-        return (xt - xf) ** 2 + (yt - yf) ** 2
+    def is_symmetric(arr: np.ndarray) -> None:
+        for i in range(24):
+            for j in range(24):
+                if not math.isclose(arr[i, j], arr[Utils.symmetric((i, j))]):
+                    Utils.tofile("debug/probs.txt", arr)
+                    raise Exception(
+                        f"array not symmetric: {arr[i,j]}!={arr[Utils.symmetric((i, j))]}"
+                    )
+
+    @staticmethod
+    def is_top_half(pos: tuple[int, int]) -> bool:
+        x, y = pos
+        return x + y <= 23
 
     @staticmethod
     def prob_mult(a: float, b: float) -> float:
@@ -152,28 +196,41 @@ class Utils:
         np.savetxt(filename, arr, fmt="%s")
 
     @staticmethod
-    def poisson(P: np.ndarray, k: int):
+    def poisson_binomial(P: np.ndarray, k: int) -> tuple[float, np.ndarray]:
         """
-        returns probabilities of getting k given the i-th entry being positive for each 0<=i<n 
+        returns probabilities of getting k given the i-th entry being positive for each 0<=i<n
         as well as probability of getting exactly k positive results
-
+        DP[i, j, l] = probability of l positives for the first i tests, disregarding the j-th test
         """
+        if P.ndim != 1:
+            raise Exception("Invalid array dimension: ", P.shape)
+        if k == 0:
+            return 1, np.zeros(len(P))
         n = len(P)
-        DP = np.zeros((n + 1, n + 1, k + 1), dtype=int)
-        DP[0, 0] = 1
+        DP = np.zeros((n + 1, n + 1, k + 1))
+        DP[0, :, 0] = 1
         for i in range(1, n + 1):
-            for j in range(0, n):
-                for l in range(0, k):
-                    if i == j:
+            for j in range(0, n + 1):
+                if i - 1 == j:
+                    DP[i, j, 0] = DP[i - 1, j, 0]
+                else:
+                    DP[i, j, 0] = DP[i - 1, j, 0] * (1 - P[i - 1])
+                for l in range(1, k + 1):
+                    if i - 1 == j:
                         DP[i, j, l] = DP[i - 1, j, l]
                     else:
                         DP[i, j, l] = (
-                            DP[i - 1, j, l] * (1 - P[i]) + DP[i - 1, j, l - 1] * P[i]
+                            DP[i - 1, j, l] * (1 - P[i - 1])
+                            + DP[i - 1, j, l - 1] * P[i - 1]
                         )
-        return DP[n, n, k], DP[n, :, k - 1]
+        # we sometimes get a vanishingly small probability of getting exactly k positives
+        # this is problematic, as we divide by said probability when using the Bayes formula
+        # We thus select a small epsilon to avoid minuscule
+        epsilon = 1e-4
+        return max(DP[n, n, k], epsilon), DP[n, :-1, k - 1]
 
     @staticmethod
-    def bernoulli(p: float, k: int, n: int) -> float:
+    def bernoulli_binomial(p: float, k: int, n: int) -> float:
         """
         Return the probability of get k in a binomial distribution with n runs
         """
@@ -182,6 +239,6 @@ class Utils:
     @staticmethod
     def bayes(a, b, b_given_a):
         """
-        Bayes formula
+        Bayes' formula
         """
         return b_given_a * a / b

@@ -50,6 +50,8 @@ class Units(ABC):
         # We purposefully omit the type of list entries, to avoid having to use generics (duck typing)
         self.units: list = []
         self.obs = obs
+        # penalty for taking unknown tiles during pathfinding
+        self.unknown_penalty: int = 3
 
     @abstractmethod
     def choose_actions(self, actions: np.ndarray) -> None:
@@ -99,4 +101,5 @@ class Units(ABC):
             self.obs.step,
             self.obs.drift_dir,
             self.obs.drift_steps,
+            self.unknown_penalty,
         )

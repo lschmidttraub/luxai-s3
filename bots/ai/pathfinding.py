@@ -22,19 +22,29 @@ class PathFinding:
         start_step: int = 0,
         drift_dir: int = 0,
         drift_steps: int = 0,
+        unknown_penalty: int = 10,
     ) -> list[tuple[int, int]] | None:
         """
         Return array of positions needed to go through to get to target
         """
         if start == goal:
             return []
+        # We have 2 possible penalties: one for known or one for unknown tiles
+        # if unknown_penalty is negative, we interpret that as a penalty for known tiles
+        known_penalty = 0
+        if unknown_penalty < 0:
+            known_penalty = -unknown_penalty
+            unknown_penalty = 0
+
         # The heap is a minHeap in which the value is the distance + some heuristic
         # and the key is a position and a step (to know when to shift)
         heap = []
         heappush(heap, (0, start, start_step))
 
-        # heuristic function = Manhattan distance
-        heuristic = lambda pos: Utils.dist(pos, goal)
+        # heuristic function = Euclidean distance squared
+        # we can't take square because heuristic has to be optimistic,
+        # and using Manhattan distance leads to very 'blocky' paths
+        heuristic = lambda pos: Utils.euclidean_dist(pos, goal)
 
         # Maintain parent dictionary for backtracking
         parent = {}
@@ -54,7 +64,9 @@ class PathFinding:
             # Since tiles aren't necessarily processed in ascending step order,
             # we need to create a shifted copy of our map each time we pop from the heap
             if drift_steps:
-                shift = (step // drift_steps - start_step // drift_steps) * drift_dir
+                shift = (
+                    (step - 1) // drift_steps - (start_step - 1) // drift_steps
+                ) * drift_dir
             else:
                 shift = 0
             shifted_map = np.roll(start_map, (shift, -shift), axis=(1, 0))
@@ -72,10 +84,13 @@ class PathFinding:
                     heappush(
                         heap,
                         (
-                            g_score[nb] + heuristic(nb)
-                            # Since we would rather not take unknown tiles, we incur a penalty to taking
-                            # unknown tiles (this penalty can be changed, I just think 10 seems reasonable)
-                            + (10 if shifted_map[nb] == UNKNOWN else 0),
+                            g_score[nb]
+                            + heuristic(nb)
+                            + (
+                                unknown_penalty
+                                if shifted_map[nb] == UNKNOWN
+                                else known_penalty
+                            ),
                             nb,
                             step + 1,
                         ),

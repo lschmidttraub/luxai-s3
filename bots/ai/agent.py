@@ -1,6 +1,7 @@
 """
-BOILERPLATE CODE
+Agent class groups Strategy and Observation together
 """
+
 import numpy as np
 from strategy import Strategy
 from observation import Observation
