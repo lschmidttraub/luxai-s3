@@ -44,6 +44,9 @@ class Unit(ABC):
         self.pos = Utils.move(self.pos, action)
         return action
 
+    def has_action(self) -> bool:
+        return bool(self.future_actions) and self.future_actions[0] != CENTER
+
 
 class Units(ABC):
     def __init__(self, obs: Observation):
@@ -103,3 +106,24 @@ class Units(ABC):
             self.obs.drift_steps,
             self.unknown_penalty,
         )
+
+    def partition(self) -> dict:
+        """
+        Partitions the grid in a Voronoi-esque partition, where each position is associated to the closest unit
+        """
+        if not self.units:
+            return {}
+        partition = {unit.id: [] for unit in self.units}
+
+        def closest_unit(pos: tuple[int, int]) -> int:
+            m_unit = self.units[0]
+            for unit in self.units[1:]:
+                if Utils.dist(pos, unit.pos) < Utils.dist(pos, m_unit):
+                    m_unit = unit
+            return m_unit.id
+
+        for x in range(24):
+            for y in range(24):
+                partition[closest_unit((x, y))].append((x, y))
+
+        return partition

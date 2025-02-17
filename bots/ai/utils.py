@@ -4,6 +4,8 @@ This file provides important constants, as well as the Utils class, which bundle
 
 import numpy as np
 import math
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 # Set this to False when shipping
 DEBUG = True
@@ -196,6 +198,12 @@ class Utils:
         np.savetxt(filename, arr, fmt="%s")
 
     @staticmethod
+    def heatmap(filename: str, arr: np.ndarray):
+        fig = sns.heatmap(arr.T)
+        plt.savefig(filename)
+        plt.clf()
+
+    @staticmethod
     def poisson_binomial(P: np.ndarray, k: int) -> tuple[float, np.ndarray]:
         """
         returns probabilities of getting k given the i-th entry being positive for each 0<=i<n
@@ -215,6 +223,7 @@ class Utils:
                     DP[i, j, 0] = DP[i - 1, j, 0]
                 else:
                     DP[i, j, 0] = DP[i - 1, j, 0] * (1 - P[i - 1])
+
                 for l in range(1, k + 1):
                     if i - 1 == j:
                         DP[i, j, l] = DP[i - 1, j, l]
@@ -226,7 +235,7 @@ class Utils:
         # we sometimes get a vanishingly small probability of getting exactly k positives
         # this is problematic, as we divide by said probability when using the Bayes formula
         # We thus select a small epsilon to avoid minuscule
-        epsilon = 1e-4
+        epsilon = 1e-5
         return max(DP[n, n, k], epsilon), DP[n, :-1, k - 1]
 
     @staticmethod

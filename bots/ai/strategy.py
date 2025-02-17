@@ -105,7 +105,13 @@ class Strategy:
                 ],
                 dtype=int,
             )
-            self.update_unit_probs(enemy_unit_pos, pt_diff[1 - self.obs.player])
+
+            if not pt_diff[1 - self.obs.player]:
+                for p in map(tuple, enemy_unit_pos):
+                    self.mark_impossible(p)
+                    self.update_prob(p, -1)
+
+            # self.update_unit_probs(enemy_unit_pos, pt_diff[1 - self.obs.player])
 
             if DEBUG:
                 interval = 50
@@ -131,6 +137,11 @@ class Strategy:
         self.relic_tile_probs[pos] = new_prob
         # since the map is symmetric, we always add a position as well as its corresponding image
         self.relic_tile_probs[Utils.symmetric(pos)] = new_prob
+
+    def mark_impossible(self, pos):
+        self.update_prob(pos, -1)
+        self.possible_relic_tiles[pos] = False
+        self.possible_relic_tiles[Utils.symmetric(pos)] = False
 
     def update_probs_around_node(self, node: tuple[int, int]):
         """
@@ -235,13 +246,13 @@ class Strategy:
         n_attackers = int(round(n_units * attacker_prop))
         n_miners = n_units - n_scouts - n_attackers
         """
+
         n_scouts, n_miners, n_attackers = 0, 0, 0
         if self.obs.relic_nodes:
             n_miners = math.ceil(n_units * 2 / 3)
         if self.obs.enemy_units and n_units - n_miners > 1:
             n_attackers = 1
         n_scouts = n_units - n_miners - n_attackers
-
         if DEBUG:
             with open("debug/props.txt", "a") as file:
                 file.write(

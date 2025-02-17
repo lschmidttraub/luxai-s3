@@ -61,6 +61,7 @@ class PathFinding:
                 visited.add(pos)
             if pos == goal:
                 return PathFinding.reconstruct_path(parent, pos)
+
             # Since tiles aren't necessarily processed in ascending step order,
             # we need to create a shifted copy of our map each time we pop from the heap
             if drift_steps:
@@ -71,11 +72,11 @@ class PathFinding:
                 shift = 0
             shifted_map = np.roll(start_map, (shift, -shift), axis=(1, 0))
             # rollover tiles are UNKNOWN
-            if drift_dir == 1:
+            if drift_dir == 1 and shift:
                 shifted_map[-shift:, :] = UNKNOWN
-                shifted_map[:, : shift - 1] = UNKNOWN
-            elif drift_dir == -1:
-                shifted_map[: -shift - 1, :] = UNKNOWN
+                shifted_map[:, :shift] = UNKNOWN
+            elif drift_dir == -1 and shift:
+                shifted_map[:-shift, :] = UNKNOWN
                 shifted_map[:, shift:] = UNKNOWN
 
             for nb in PathFinding.get_neighbors(pos, shifted_map):
@@ -116,7 +117,7 @@ class PathFinding:
         ]
 
     @staticmethod
-    def reconstruct_path(parent: dict, cell: tuple[int, int]) -> list[tuple[int, int]]:
+    def reconstruct_path(parent: dict, cell: tuple[int, int]) -> list:
         """
         Returns list of positions used to get to cell, in reversed order
         """

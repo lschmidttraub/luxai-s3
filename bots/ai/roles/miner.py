@@ -27,18 +27,43 @@ class Miners(Units):
     def choose_actions(self, actions: np.ndarray) -> None:
         if len(self.units) and not len(self.obs.relic_nodes):
             raise Exception("Use of miner units without any discovered relics")
+
         # we exclude the tiles that the units are already on, to avoid units constantly
         # exchanging each others tiles
         self.unit_targets = set(
             [unit.pos for unit in self.units] + [unit.target for unit in self.units]
         )
-        needs_target = np.ones(len(self.units), dtype=bool)
-        while needs_target.any():
-            for unit in needs_target:
-                pass
+        # weight of the probability (higher means that probability is taken more into account)
+        alpha = 40
+
+        def score(unit: Miner, pos: tuple[int, int]) -> float:
+            # score function: smaller is better (so then it's easier to extract maximum)
+            return Utils.dist(unit.pos, pos) - alpha * self.relic_tile_probs[pos]
+
+        # of course it would be nice to not have to this every iteration, but this is fine for now
+        needs_target = set(self.units)
+
+        scores = [
+            (score(unit, (i, j)), unit, (i, j))
+            for unit in needs_target
+            for i, j in np.ndindex((24, 24))
+            if self.relic_tile_probs[i, j] >= 0.2
+        ]
+
+        scores.sort(key=lambda x: x[0])
+
+        # the idea is that we want to move units to the tiles with the highest probabilities of being
+        # relic tiles, but we don't want them all to go to the same tile
+        for _, unit, pos in scores:
+            if unit in needs_target:
+                unit.target = pos
+                if self.calc_path(unit) is not None:
+                    needs_target.remove(unit)
+                    self.calc_future_actions(unit)
+                    actions[unit.id][0] = unit.next_action(self.obs)
+
+        """
         for unit in self.units:
-            # the idea is that we want to move units to the tiles with the highest probabilities of being
-            # relic tiles, but we don't want them all to go to the same tile
             unreachable = set()
             new_target = self.max_prob_in_range(
                 unit, self.unit_search_radius, unreachable
@@ -55,6 +80,7 @@ class Miners(Units):
                 self.calc_future_actions(unit)
             actions[unit.id][0] = unit.next_action(self.obs)
             self.unit_targets.add(new_target)
+        """
 
     def update_relic_probs(self, new_probs: np.ndarray) -> None:
         self.relic_tile_probs = new_probs

@@ -16,7 +16,7 @@ class Scouts(Units):
     def __init__(self, obs: Observation):
         super().__init__(obs)
         # scouts prefer to explore unknown tiles so we choose a negative penalty
-        self.unknown_penalty = -1
+        self.unknown_penalty = 0
 
     def choose_actions(self, actions: np.ndarray) -> None:
         if len(self.units) and not self.obs.undiscovered_count():
@@ -64,7 +64,7 @@ class Scouts(Units):
             np.where(
                 np.logical_and(self.obs.exploration == UNKNOWN, ~self.obs.nebula_mask)
             )
-        )[0]:
+        ).squeeze():
             # we have to convert positions to tuples to avoid errors during the A-star algorithm
             tuple_idx = tuple(idx)
             if tuple_idx in unreachable:
@@ -82,6 +82,17 @@ class Scouts(Units):
             ):
                 m_dist = d
                 m_pos = tuple_idx
+
+        if m_pos is None:
+            return pos
+            # If everything is explored, just explore the tiles with the oldest exploration value again
+            m_score = 0
+            for x, y in Utils.position_mask(pos, 4):
+                if (x, y) != pos:
+                    score = self.obs.exploration[x, y] / Utils.dist(pos, (x, y))
+                    if score > m_score:
+                        m_score = score
+                        m_pos = (x, y)
         if m_pos is None:
             raise Exception(
                 "Assigned scout role when all squares were explored. explore ratio (Should have been checked earlier)"

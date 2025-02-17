@@ -4,6 +4,7 @@ The Observation class is made to create a coherent inner representation of what 
 
 import numpy as np
 from utils import *
+import seaborn as sns
 
 
 class Observation:
@@ -79,9 +80,9 @@ class Observation:
 
         self.shift(step, new_tiles, vision_mask)
 
-        self.update_vis(new_tiles, vision_mask)
-
         self.update_exploration(new_tiles, vision_mask)
+
+        self.update_vis(new_tiles, vision_mask)
 
         # only the relic nodes that are unmasked are visible, the other ones should be ignored
         # we add all elements (witht the | operator) instead of replacing the set outright since the observed relic nodes reset after each match
@@ -117,7 +118,7 @@ class Observation:
 
         # These are the two possible non-zero times at which the tiles first move
         # speed: -0.05, -0.025, 0, 0.025, 0.05
-        if ~self.drift_steps and (self.step == 21 or self.step == 41):
+        if not self.drift_steps and (self.step == 21 or self.step == 41):
             # match the new tiles to a tiles motion of the previous board: -1, 0 or 1
             d = Utils.match_shift(
                 self.vision, self.exploration == 0, new_tiles, vision_mask
@@ -162,11 +163,11 @@ class Observation:
                 joined_mask = np.logical_and(self.exploration == 0, vision_mask)
                 if not np.all(self.vision[joined_mask] == new_tiles[joined_mask]):
                     if DEBUG:
-                        Utils.tofile("debug/vision.txt", self.vision)
-                        Utils.tofile("debug/new.txt", new_tiles)
-                        Utils.tofile("debug/mask.txt", joined_mask)
-                        Utils.tofile("debug/sensor.txt", vision_mask)
-                        Utils.tofile("debug/exploration.txt", self.exploration)
+                        Utils.heatmap("debug/vision.jpg", self.vision)
+                        Utils.heatmap("debug/new.jpg", new_tiles)
+                        Utils.heatmap("debug/mask.jpg", joined_mask)
+                        Utils.heatmap("debug/sensor.jpg", vision_mask)
+                        Utils.heatmap("debug/exploration.jpg", self.exploration)
 
                     raise Exception(
                         "Discrepancy between predicted and observed shift",
@@ -186,6 +187,7 @@ class Observation:
             new_tiles,
             self.vision,
         )
+        self.vision[self.exploration == UNKNOWN] = UNKNOWN
 
     def calc_units(self, pos, energy, mask) -> dict[int, tuple[tuple[int, int], int]]:
         """
@@ -212,13 +214,16 @@ class Observation:
         """
         adds newly observed nebula tiles to nebula array
         """
-        self.nebula_mask = np.logical_or(
-            self.nebula_mask,
-            np.logical_and(new_tiles == NEBULA_TILE, vision_mask),
-        )
+        self.nebula_mask[np.logical_and(new_tiles == NEBULA_TILE, vision_mask)] = True
 
     def undiscovered_count(self) -> int:
         """
         Returns the count of unexplored tiles
         """
         return np.sum(self.exploration == UNKNOWN)
+
+    def discovered_all_tiles_except_nebula(self):
+        """
+        return True iff all tiles, except for nebula tiles, have been discovered
+        """
+        return np.logical_or(self.exploration != UNKNOWN, self.nebula_mask).all()
