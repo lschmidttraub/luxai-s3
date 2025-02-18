@@ -4,6 +4,7 @@ The Observation class is made to create a coherent inner representation of what 
 
 import numpy as np
 from utils import *
+import seaborn as sns
 
 
 class Observation:
@@ -24,11 +25,11 @@ class Observation:
 
         self.player: int = player
 
-        self.step: int
-        self.pts: tuple[int, int] = (0, 0)
+        self.step: int = 0
+        self.pts: np.ndarray = np.zeros(2, dtype=int)
         # Difference in points between successive turns
         # shows many relic tiles were visited during this turn
-        self.pt_diff: np.ndarray | None
+        self.pt_diff: np.ndarray | None = None
 
         self.units: dict[int, tuple[tuple[int, int], int]] = {}
         self.enemy_units: dict[int, tuple[tuple[int, int], int]] = {}
@@ -48,6 +49,7 @@ class Observation:
         self.drift_steps = 0
         # Either 0(no motion), 1(towards top-right), -1(towards bottom-left)
         self.drift_dir = 0
+        self.prev_mask: np.ndarray
 
     def update_observation(self, step: int, obs: dict) -> None:
         """
@@ -69,19 +71,25 @@ class Observation:
 
         # boolean mask of tiles that are currently visible
         vision_mask = np.array(obs["sensor_mask"], dtype=bool)
+        self.prev_mask = vision_mask
 
         # dictionary with energy and tile types
         map_features = obs["map_features"]
         # we don't currently use energy information but probably should
-        self.energy = map_features["energy"]
+        new_energy = map_features["energy"]
         # new observed tiles
         new_tiles = np.array(map_features["tile_type"], dtype=int)
 
         self.shift(step, new_tiles, vision_mask)
 
+        # Update exploration before vision
+        self.update_exploration(new_tiles, vision_mask)
+
         self.update_vis(new_tiles, vision_mask)
 
-        self.update_exploration(new_tiles, vision_mask)
+        self.update_nebulae(new_tiles, vision_mask)
+
+        self.update_energy(new_energy, vision_mask)
 
         # only the relic nodes that are unmasked are visible, the other ones should be ignored
         # we add all elements (witht the | operator) instead of replacing the set outright since the observed relic nodes reset after each match
@@ -117,7 +125,7 @@ class Observation:
 
         # These are the two possible non-zero times at which the tiles first move
         # speed: -0.05, -0.025, 0, 0.025, 0.05
-        if ~self.drift_steps and (self.step == 21 or self.step == 41):
+        if not self.drift_steps and (self.step == 21 or self.step == 41):
             # match the new tiles to a tiles motion of the previous board: -1, 0 or 1
             d = Utils.match_shift(
                 self.vision, self.exploration == 0, new_tiles, vision_mask
@@ -162,11 +170,11 @@ class Observation:
                 joined_mask = np.logical_and(self.exploration == 0, vision_mask)
                 if not np.all(self.vision[joined_mask] == new_tiles[joined_mask]):
                     if DEBUG:
-                        Utils.tofile("debug/vision.txt", self.vision)
-                        Utils.tofile("debug/new.txt", new_tiles)
-                        Utils.tofile("debug/mask.txt", joined_mask)
-                        Utils.tofile("debug/sensor.txt", vision_mask)
-                        Utils.tofile("debug/exploration.txt", self.exploration)
+                        Utils.heatmap("debug/vision.jpg", self.vision)
+                        Utils.heatmap("debug/new.jpg", new_tiles)
+                        Utils.heatmap("debug/mask.jpg", joined_mask)
+                        Utils.heatmap("debug/sensor.jpg", vision_mask)
+                        Utils.heatmap("debug/exploration.jpg", self.exploration)
 
                     raise Exception(
                         "Discrepancy between predicted and observed shift",
@@ -186,6 +194,7 @@ class Observation:
             new_tiles,
             self.vision,
         )
+        self.vision[self.exploration == UNKNOWN] = UNKNOWN
 
     def calc_units(self, pos, energy, mask) -> dict[int, tuple[tuple[int, int], int]]:
         """
@@ -202,23 +211,35 @@ class Observation:
         Updates the exploration attribute of the Observation class as well as the new_explored_tiles attribute
         """
         # Increment the time since exploration all tiles that have already been explored by one
-        self.exploration = self.exploration + (self.exploration != -1)
+        self.exploration = self.exploration + (self.exploration != UNKNOWN)
         # Set the time since exploration of all tiles currently seen to 0
         # It is important to remember that nebula tiles aren't counted as explored:
         # we don't know what's underneath them
         self.exploration[np.logical_and(vision_mask, new_tiles != NEBULA_TILE)] = 0
+        """
+        if self.step < 150 and not self.step % 10:
+            Utils.heatmap(
+                f"debug/plots/exploration{self.step}", self.exploration == UNKNOWN
+            )
+        """
 
     def update_nebulae(self, new_tiles, vision_mask) -> None:
         """
         adds newly observed nebula tiles to nebula array
         """
-        self.nebula_mask = np.logical_or(
-            self.nebula_mask,
-            np.logical_and(new_tiles == NEBULA_TILE, vision_mask),
-        )
+        self.nebula_mask[np.logical_and(new_tiles == NEBULA_TILE, vision_mask)] = True
+
+    def update_energy(self, new_energy, vision_mask) -> None:
+        self.energy = np.where(vision_mask, new_energy, 0)
 
     def undiscovered_count(self) -> int:
         """
         Returns the count of unexplored tiles
         """
         return np.sum(self.exploration == UNKNOWN)
+
+    def discovered_all_tiles_except_nebula(self):
+        """
+        return True iff all tiles, except for nebula tiles, have been discovered
+        """
+        return np.logical_or(self.exploration != UNKNOWN, self.nebula_mask).all()
