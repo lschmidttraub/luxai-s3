@@ -25,13 +25,13 @@ class Attackers(Units):
             # (sap actions are computed after move actions)
             for _, (e_pos, e_energy) in self.obs.enemy_units.items():
                 # check if the enemy unit is within range
-                if Utils.dist(unit.pos, e_pos) <= self.obs.sap_range:
+                if Utils.max_dist(unit.pos, e_pos) <= self.obs.sap_range:
                     has_target = True
                     if unit.energy < self.obs.sap_cost:
                         # if we don't have enough energy, our goal becomes gathering energy
                         unit.target = self.find_closest_energy_square(unit.pos)
                         self.calc_future_actions(unit)
-                        actions[unit.id][0] = unit.next_action(self.obs)
+                        actions[unit.id][0] = unit.next_action()
 
                     else:
                         # otherwise, attack
@@ -40,9 +40,12 @@ class Attackers(Units):
                     break
             # if no enemy unit is within range, move towards the closest enemy unit
             if not has_target:
+                raise Exception(
+                    f"assigned attacker without enemy in sight : {unit.pos} : {self.obs.enemy_units.items()} : {self.obs.sap_range}"
+                )
                 unit.target = self.find_closest_enemy(unit.pos)
                 self.calc_future_actions(unit)
-                actions[unit.id][0] = unit.next_action(self.obs)
+                actions[unit.id][0] = unit.next_action()
 
     def find_closest_energy_square(self, pos: tuple[int, int]) -> tuple[int, int]:
         """
@@ -53,10 +56,11 @@ class Attackers(Units):
         x, y = pos
         m_pos = pos
         # find neighbor with highest energy level
-        for i, j in [(0, 0), (0, -1), (0, 1), (-1, 0), (1, 0)]:
+        for i, j in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
             if (
                 Utils.in_bounds((x + i, y + j))
-                and self.obs.energy[(x + i, y + j)] > self.obs.energy[m_pos]
+                and not self.obs.vision[x + i, y + j] == ASTEROID_TILE
+                and self.obs.energy[x + i, y + j] > self.obs.energy[m_pos]
             ):
                 m_pos = (x + i, y + j)
         # If this energy level is positive, move to this tile
@@ -64,13 +68,12 @@ class Attackers(Units):
             return m_pos
 
         # Otherwise, we find the closest tile with positive energy
-        for idx in np.where(self.obs.energy > 0):
-            x, y = idx[0], idx[1]
-
-            d = Utils.dist(pos, (x, y))
-            if m_pos is None or d < m_dist:
-                m_dist = d
-                m_pos = (x, y)
+        for p in np.ndindex(self.obs.shape):
+            if self.obs.energy[p] > 0 and self.obs.vision[p] != ASTEROID_TILE:
+                d = Utils.dist(pos, p)
+                if m_pos is None or d < m_dist:
+                    m_dist = d
+                    m_pos = p
 
         return m_pos
 

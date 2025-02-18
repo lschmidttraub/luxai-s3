@@ -16,12 +16,13 @@ import matplotlib.pyplot as plt
 class Strategy:
     def __init__(self, observation: Observation):
         self.obs = observation
-        shape = self.obs.vision.shape
+        shape = self.obs.shape
         # Maintain an mask array that shows all potential relic tiles
         # I think the best way of doing this to maintain an array of probabilities
-        self.base = 0.025
-        self.around_relic_prob = 0.2
+        self.base = 0.02
+        self.around_relic_prob = 0.1
         self.relic_tile_probs: np.ndarray = np.full(shape, self.base)
+        self.prob_weights = np.full(shape, 0)
         Utils.is_symmetric(self.relic_tile_probs)
         # used to rule out tiles that cannot be relic tiles (either already visited or too far)
         self.possible_relic_tiles: np.ndarray = np.ones(shape, dtype=bool)
@@ -37,6 +38,10 @@ class Strategy:
             "miner": Miners(self.obs),
         }
         self.all_relics_discovered = False
+
+        if DEBUG:
+            with open("targets.txt", "w") as file:
+                pass
 
     def choose_action(self) -> np.ndarray:
         """
@@ -83,35 +88,50 @@ class Strategy:
 
         # Update probabilities of the tiles units are on with poisson binomial calculation
         pt_diff = self.obs.pt_diff
+
         # if pt_diff is None, then a new match has started
         if pt_diff is not None:
+            # if the enemy has no points, we can eliminate all the tiles of enemy units
+            if not pt_diff[1 - self.obs.player]:
+                for _, (p, _) in self.obs.enemy_units.items():
+                    self.mark_impossible(p)
+
             # We store positions in numpy arrays of length 2 to make indexing the relic_tile_probs array
             # easier (just take the transpose of the position matrix)
+            k = pt_diff[self.obs.player]
+            # sometimes probabilities get really close to 1. when this happens, we can get a division by 0 in
+            # the probability update. We thus exclude these, and decrement k by the number of units
+            # with propbabilities very close to 1
+            epsilon = 1e-20
+            # We need to remove duplicates and check if energy is non-negative!
+            unique_pos = {p for _, (p, e) in self.obs.units.items() if e >= 0}
             unit_pos = np.array(
                 [
                     [x, y]
-                    for _, ((x, y), _) in self.obs.units.items()
+                    for (x, y) in unique_pos
                     if self.possible_relic_tiles[x, y]
+                    and self.relic_tile_probs[x, y] > epsilon
+                    and 1 - self.relic_tile_probs[x, y] > epsilon
                 ],
                 dtype=int,
             )
-            self.update_unit_probs(unit_pos, pt_diff[self.obs.player])
-
-            enemy_unit_pos = np.array(
-                [
-                    [x, y]
-                    for _, ((x, y), _) in self.obs.enemy_units.items()
-                    if self.possible_relic_tiles[x, y]
-                ],
-                dtype=int,
-            )
-
-            if not pt_diff[1 - self.obs.player]:
-                for p in map(tuple, enemy_unit_pos):
-                    self.mark_impossible(p)
-                    self.update_prob(p, -1)
-
-            # self.update_unit_probs(enemy_unit_pos, pt_diff[1 - self.obs.player])
+            for p in unique_pos:
+                if 1 - self.relic_tile_probs[p] <= epsilon:
+                    k -= 1
+            if k < 0:
+                msg = [
+                    (p, self.relic_tile_probs[p])
+                    for _, (p, _) in self.obs.units.items()
+                ]
+                with open("debug/problematic.txt", "a") as file:
+                    file.write(f"{self.obs.step} : {msg}\n")
+                k = 0
+                """
+                raise Exception(
+                    f"negative k {k} : {msg} : {self.obs.pt_diff[self.obs.player]}"
+                )
+                """
+            self.update_unit_probs(unit_pos, k)
 
             if DEBUG:
                 interval = 50
@@ -182,13 +202,15 @@ class Strategy:
         for p in Utils.position_mask(pos, 2):
             if self.obs.exploration[p] == UNKNOWN:
                 return
+
         # The entire surroundings have been scanned
         self.scanned_surroundings[pos] = True
-        self.possible_relic_tiles[pos] = False
+
         for p in self.obs.relic_nodes:
             # if a relic_node is in range, then it is possible
             if Utils.max_dist(p, pos) <= 2:
-                self.possible_relic_tiles[pos] = True
+                return
+        self.mark_impossible(pos)
 
     def update_unit_probs(self, positions: np.ndarray, k: int) -> None:
         """
@@ -203,16 +225,18 @@ class Strategy:
             raise Exception("positions has wrong shape:", positions.shape)
         if not k:
             for p in map(tuple, positions):
-                self.possible_relic_tiles[p] = False
-                self.possible_relic_tiles[Utils.symmetric(p)] = False
-                self.update_prob(p, -1)
+                self.mark_impossible(p)
             Utils.is_symmetric(self.relic_tile_probs)
             return
+
         P = self.relic_tile_probs[tuple(positions.T)]
         b, b_given_a = Utils.poisson_binomial(P, k)
-        probs = Utils.bayes(P, b, b_given_a)
+        new_probs = Utils.bayes_exp(np.log(P), b, b_given_a)
+        W = self.prob_weights[tuple(positions.T)]
+        weighted_probs = new_probs + P * W
+        self.prob_weights[tuple(positions.T)] = (W + 1) / 2
 
-        for pos, prob in zip(map(tuple, positions), probs):
+        for pos, prob in zip(map(tuple, positions), new_probs):
             self.update_prob(pos, prob)
         Utils.is_symmetric(self.relic_tile_probs)
 
@@ -252,12 +276,17 @@ class Strategy:
             n_miners = math.ceil(n_units * 2 / 3)
         if self.obs.enemy_units and n_units - n_miners > 1:
             n_attackers = 1
+        if self.obs.discovered_all_tiles_except_nebula():
+            n_miners = n_units - n_attackers
         n_scouts = n_units - n_miners - n_attackers
+
+        """
         if DEBUG:
             with open("debug/props.txt", "a") as file:
                 file.write(
                     f"step:{self.obs.step}, n:{n_units}, scout:{n_scouts}, miners:{n_miners}, attackers:{n_attackers}\n"
                 )
+        """
 
         scouts = self.unit_roles["scout"].units
         attackers = self.unit_roles["attacker"].units
@@ -283,7 +312,8 @@ class Strategy:
                 l.pop()
 
         remove_excess_units(scouts, n_scouts)
-        remove_excess_units(attackers, n_attackers)
+        # attackers are recomputed at each turn
+        remove_excess_units(attackers, 0)
         remove_excess_units(miners, n_miners)
 
         def add_new_units(l, expected_length, unit_type):
@@ -292,17 +322,24 @@ class Strategy:
                     return
                 if not taken[u_id]:
                     pos, energy = self.obs.units[u_id]
-                    l.append(unit_type(u_id, pos, energy))
+                    l.append(unit_type(u_id, pos, energy, self.obs))
                     taken[u_id] = True
 
+        found = False
+        if n_attackers:
+            for u_id, (pos, e) in self.obs.units.items():
+                for _, (e_pos, _) in self.obs.enemy_units.items():
+                    if Utils.max_dist(pos, e_pos) <= self.obs.sensor_range:
+                        attackers = [Attacker(u_id, pos, e, self.obs)]
+                        found = True
+                        break
+                if found:
+                    break
+
         add_new_units(scouts, n_scouts, Scout)
-        add_new_units(attackers, n_attackers, Attacker)
+        # add_new_units(attackers, n_attackers, Attacker)
         add_new_units(miners, n_miners, Miner)
 
         self.unit_roles["scout"].update_units(scouts)
         self.unit_roles["attacker"].update_units(attackers)
         self.unit_roles["miner"].update_units(miners)
-
-        if DEBUG:
-            with open("debug/log.txt", "w") as log:
-                log.write(f"{scouts}, {attackers}, {miners}")

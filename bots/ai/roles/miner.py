@@ -7,32 +7,19 @@ from pathfinding import PathFinding
 
 
 class Miner(Unit):
-    def __init__(
-        self,
-        u_id: int,
-        pos: tuple[int, int],
-        energy: int,
-        target: tuple[int, int] | None = None,
-    ):
-        super().__init__(u_id, pos, energy, target)
+    pass
 
 
 class Miners(Units):
     def __init__(self, obs: Observation):
         super().__init__(obs)
         self.unit_search_radius = 10
-        self.unit_targets = set()
         self.relic_tile_probs: np.ndarray
 
     def choose_actions(self, actions: np.ndarray) -> None:
         if len(self.units) and not len(self.obs.relic_nodes):
             raise Exception("Use of miner units without any discovered relics")
 
-        # we exclude the tiles that the units are already on, to avoid units constantly
-        # exchanging each others tiles
-        self.unit_targets = set(
-            [unit.pos for unit in self.units] + [unit.target for unit in self.units]
-        )
         # weight of the probability (higher means that probability is taken more into account)
         alpha = 40
 
@@ -42,12 +29,12 @@ class Miners(Units):
 
         # of course it would be nice to not have to this every iteration, but this is fine for now
         needs_target = set(self.units)
-
+        taken = set()
         scores = [
             (score(unit, (i, j)), unit, (i, j))
             for unit in needs_target
             for i, j in np.ndindex((24, 24))
-            if self.relic_tile_probs[i, j] >= 0.2
+            if self.relic_tile_probs[i, j] >= 0.1
         ]
 
         scores.sort(key=lambda x: x[0])
@@ -55,12 +42,18 @@ class Miners(Units):
         # the idea is that we want to move units to the tiles with the highest probabilities of being
         # relic tiles, but we don't want them all to go to the same tile
         for _, unit, pos in scores:
-            if unit in needs_target:
+            if unit in needs_target and pos not in taken:
                 unit.target = pos
-                if self.calc_path(unit) is not None:
+                self.calc_future_actions(unit)
+                if not unit.action_invalid():
                     needs_target.remove(unit)
-                    self.calc_future_actions(unit)
-                    actions[unit.id][0] = unit.next_action(self.obs)
+                    taken.add(pos)
+                    if DEBUG:
+                        with open("debug/targets.txt", "a") as file:
+                            file.write(
+                                f"Miner : {self.obs.step} : {unit.id} : {unit.target} : {unit.future_actions}\n"
+                            )
+                    actions[unit.id][0] = unit.next_action()
 
         """
         for unit in self.units:
@@ -83,14 +76,10 @@ class Miners(Units):
         """
 
     def update_relic_probs(self, new_probs: np.ndarray) -> None:
+        """
+        We have to pass the relic tile probabilities this way, as importing the Strategy class would result in a cyclic import
+        """
         self.relic_tile_probs = new_probs
-
-    def distribute_relics(self) -> None:
-        """
-        We don't want to send all nodes to the same relic tile, so we use this function
-        INCOMPLETE
-        """
-        relics = self.obs.relic_nodes
 
     def closest_relic_node(self, pos: tuple[int, int]) -> tuple[int, int]:
         """
@@ -126,13 +115,12 @@ class Miners(Units):
                 and self.relic_tile_probs[pos] < self.relic_tile_probs[m_pos]
             ):
                 m_pos = pos
-        if self.relic_tile_probs[m_pos] > 0.025:
+        if self.relic_tile_probs[m_pos] > 0.02:
             return m_pos
 
         for p in mask:
             if (
-                not p in self.unit_targets
-                and not p in unreachable
+                not p in unreachable
                 and self.relic_tile_probs[p] < self.relic_tile_probs[m_pos]
             ):
                 m_pos = p

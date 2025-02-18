@@ -182,6 +182,15 @@ class Utils:
         return x + y <= 23
 
     @staticmethod
+    def in_player_half(pos: tuple[int, int], player: int) -> bool:
+        x, y = pos
+        if player == 0:
+            return x + y <= 23
+        elif player == 1:
+            return x + y >= 23
+        raise Exception(f"Invalid player id: {player}")
+
+    @staticmethod
     def prob_mult(a: float, b: float) -> float:
         """
         Combines the probabilities of two overlapping relic tiles, by multiplying the probability that
@@ -210,33 +219,38 @@ class Utils:
         as well as probability of getting exactly k positive results
         DP[i, j, l] = probability of l positives for the first i tests, disregarding the j-th test
         """
+        epsilon = 1e-5
         if P.ndim != 1:
             raise Exception("Invalid array dimension: ", P.shape)
+        if (P < 0).any():
+            raise Exception("Invalid input:", P)
         if k == 0:
             return 1, np.zeros(len(P))
         n = len(P)
-        DP = np.zeros((n + 1, n + 1, k + 1))
-        DP[0, :, 0] = 1
+        DP = np.full((n + 1, n + 1, k + 1), float("-inf"))
+        DP[0, :, 0] = 0
         for i in range(1, n + 1):
             for j in range(0, n + 1):
+                p = P[i - 1]
                 if i - 1 == j:
                     DP[i, j, 0] = DP[i - 1, j, 0]
                 else:
-                    DP[i, j, 0] = DP[i - 1, j, 0] * (1 - P[i - 1])
+                    DP[i, j, 0] = DP[i - 1, j, 0] + np.log(max(1 - p, epsilon))
 
                 for l in range(1, k + 1):
                     if i - 1 == j:
                         DP[i, j, l] = DP[i - 1, j, l]
                     else:
-                        DP[i, j, l] = (
-                            DP[i - 1, j, l] * (1 - P[i - 1])
-                            + DP[i - 1, j, l - 1] * P[i - 1]
+                        DP[i, j, l] = np.logaddexp(
+                            DP[i - 1, j, l] + np.log(max(1 - p, epsilon)),
+                            DP[i - 1, j, l - 1] + np.log(p),
                         )
         # we sometimes get a vanishingly small probability of getting exactly k positives
         # this is problematic, as we divide by said probability when using the Bayes formula
         # We thus select a small epsilon to avoid minuscule
-        epsilon = 1e-5
-        return max(DP[n, n, k], epsilon), DP[n, :-1, k - 1]
+        if np.isnan(DP).any():
+            raise Exception(f"nan found: {DP}")
+        return DP[n, n, k], DP[n, :-1, k - 1]
 
     @staticmethod
     def bernoulli_binomial(p: float, k: int, n: int) -> float:
@@ -246,8 +260,10 @@ class Utils:
         return math.comb(n, k) * p**k * (1 - p) ** (n - k)
 
     @staticmethod
-    def bayes(a, b, b_given_a):
+    def bayes_exp(a, b, b_given_a):
         """
         Bayes' formula
         """
-        return b_given_a * a / b
+        if np.isnan(b_given_a + a - b).any():
+            raise Exception(f"nan: {b_given_a}, {a}, {b}")
+        return np.exp(b_given_a + a - b)
