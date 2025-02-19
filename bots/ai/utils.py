@@ -171,7 +171,8 @@ class Utils:
         for i in range(24):
             for j in range(24):
                 if not math.isclose(arr[i, j], arr[Utils.symmetric((i, j))]):
-                    Utils.tofile("debug/probs.txt", arr)
+                    if DEBUG:
+                        Utils.tofile("debug/probs.txt", arr)
                     raise Exception(
                         f"array not symmetric: {arr[i,j]}!={arr[Utils.symmetric((i, j))]}"
                     )
@@ -213,13 +214,12 @@ class Utils:
         plt.clf()
 
     @staticmethod
-    def poisson_binomial(P: np.ndarray, k: int) -> tuple[float, np.ndarray]:
+    def poisson_binomial_log(P: np.ndarray, k: int) -> tuple[float, np.ndarray]:
         """
         returns probabilities of getting k given the i-th entry being positive for each 0<=i<n
         as well as probability of getting exactly k positive results
         DP[i, j, l] = probability of l positives for the first i tests, disregarding the j-th test
         """
-        epsilon = 1e-5
         if P.ndim != 1:
             raise Exception("Invalid array dimension: ", P.shape)
         if (P < 0).any():
@@ -235,19 +235,16 @@ class Utils:
                 if i - 1 == j:
                     DP[i, j, 0] = DP[i - 1, j, 0]
                 else:
-                    DP[i, j, 0] = DP[i - 1, j, 0] + np.log(max(1 - p, epsilon))
+                    DP[i, j, 0] = DP[i - 1, j, 0] + np.log(1 - p)
 
                 for l in range(1, k + 1):
                     if i - 1 == j:
                         DP[i, j, l] = DP[i - 1, j, l]
                     else:
                         DP[i, j, l] = np.logaddexp(
-                            DP[i - 1, j, l] + np.log(max(1 - p, epsilon)),
+                            DP[i - 1, j, l] + np.log(1 - p),
                             DP[i - 1, j, l - 1] + np.log(p),
                         )
-        # we sometimes get a vanishingly small probability of getting exactly k positives
-        # this is problematic, as we divide by said probability when using the Bayes formula
-        # We thus select a small epsilon to avoid minuscule
         if np.isnan(DP).any():
             raise Exception(f"nan found: {DP}")
         return DP[n, n, k], DP[n, :-1, k - 1]

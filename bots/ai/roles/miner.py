@@ -92,9 +92,7 @@ class Miners(Units):
                 m_relic = relic
                 m_dist = Utils.dist(pos, m_relic)
         if m_relic is None:
-            raise Exception(
-                "Use of miners without relics (this should have been have been checked earlier)"
-            )
+            raise Exception("Use of miners without relics")
         return m_relic
 
     def max_prob_in_range(

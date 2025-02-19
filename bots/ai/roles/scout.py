@@ -24,12 +24,6 @@ class Scouts(Units):
         self.unit_targets = set()
 
     def choose_actions(self, actions: np.ndarray) -> None:
-        if len(self.units) and not self.obs.undiscovered_count():
-            raise Exception(
-                "Assigned scout role when all squares were explored",
-                self.obs.undiscovered_count(),
-            )
-
         self.target_tiles = {
             target
             for target in self.target_tiles
@@ -41,18 +35,6 @@ class Scouts(Units):
         }
 
         for unit in self.units:
-            """
-            # if the unit has no more actions left, or its target has already been explored,
-            # we recompute its future_actions attribute
-            unreachable = set()
-            unit.target = self.closest_unexplored(unit.pos, unreachable)
-            while not self.calc_path(unit):
-                unreachable.add(unit.target)
-                unit.target = self.closest_unexplored(unit.pos, unreachable)
-            self.calc_future_actions(unit)
-
-            actions[unit.id][0] = unit.next_action(self.obs)
-            """
             if unit.action_invalid() or self.obs.exploration[unit.target] != UNKNOWN:
                 for tile in self.target_tiles:
                     if not tile in self.unit_targets:
@@ -60,26 +42,18 @@ class Scouts(Units):
                         self.calc_future_actions(unit)
                         if not unit.action_invalid():
                             self.unit_targets.add(tile)
-                            if unit.target == unit.pos:
-                                raise Exception(
-                                    f"first {unit.pos} : {self.target_tiles}"
-                                )
                             break
                 if unit.action_invalid() or self.obs.exploration[unit.pos] != UNKNOWN:
                     unit.target = self.closest_unexplored(unit.pos)
                     self.calc_future_actions(unit)
-                    if unit.target == unit.pos:
-                        raise Exception(f"yep. {unit.pos} : {unit.target}")
                     if not unit.future_actions:
                         unit.future_actions = [CENTER]
             actions[unit.id][0] = unit.next_action()
-            """
             if DEBUG:
                 with open("debug/targets.txt", "a") as file:
                     file.write(
                         f"Scout : {self.obs.step} : {unit.id} : {unit.target} : {actions[unit.id][0]} : {unit.future_actions}\n"
                     )
-                """
 
     def closest_unexplored(
         self, pos: tuple[int, int], unreachable: set = set()
@@ -113,28 +87,33 @@ class Scouts(Units):
                     m_pos = p
 
         if pos == m_pos:
-            Utils.heatmap("debug/exploration.jpg", self.obs.exploration)
-            Utils.heatmap("debug/nebula.jpg", self.obs.nebula_mask)
-            Utils.heatmap("debug/prev_mask.jpg", self.obs.prev_mask)
+            if DEBUG:
+                Utils.heatmap("debug/exploration.jpg", self.obs.exploration)
+                Utils.heatmap("debug/nebula.jpg", self.obs.nebula_mask)
+                Utils.heatmap("debug/prev_mask.jpg", self.obs.prev_mask)
+                with open("debug/wrong.txt", "a") as file:
+                    file.write(
+                        f"unknown : {pos} : {self.obs.exploration[pos]} : {self.obs.nebula_mask[pos]}"
+                    )
+            return m_pos
 
-            raise Exception(
-                f"unknown : {pos} : {self.obs.exploration[pos]} : {self.obs.nebula_mask[pos]}"
-            )
         if m_pos is None:
             # If everything is explored, just explore the tiles with the oldest exploration value again
-            m_score = 0
+            m_score = -1
             for x, y in Utils.position_mask(pos, 4):
                 if (x, y) != pos:
                     score = self.obs.exploration[x, y] / Utils.dist(pos, (x, y))
                     if score > m_score:
                         m_score = score
                         m_pos = (x, y)
+
         if m_pos is None:
             raise Exception(
                 "Assigned scout role when all squares were explored. explore ratio (Should have been checked earlier)"
             )
         if pos == m_pos:
-            Utils.tofile("debug/exploration.txt", self.obs.exploration)
+            if DEBUG:
+                Utils.tofile("debug/exploration.txt", self.obs.exploration)
             raise Exception("explored")
 
         return m_pos

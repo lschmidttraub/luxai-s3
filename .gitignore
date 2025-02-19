@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.txt
-debug/
+*.jpg
+*.png
 test.py
 *.DS_Store

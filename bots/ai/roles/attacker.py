@@ -15,8 +15,6 @@ class Attackers(Units):
     def choose_actions(self, actions: np.ndarray) -> None:
         # this is still a very naive approach: simply attack the first enemy you see
         # ideas for improvement: create a map of enemy units, to track clusters + split attackers according to cluster sizes
-        if len(self.units) and not len(self.obs.enemy_units):
-            raise Exception("Assigned attacker without any enemy units")
         for unit in self.units:
             # units_in_range[u_id].append(e_pos)
             # attackers[e_id].append(u_id)
@@ -40,9 +38,9 @@ class Attackers(Units):
                     break
             # if no enemy unit is within range, move towards the closest enemy unit
             if not has_target:
-                raise Exception(
+                """raise Exception(
                     f"assigned attacker without enemy in sight : {unit.pos} : {self.obs.enemy_units.items()} : {self.obs.sap_range}"
-                )
+                )"""
                 unit.target = self.find_closest_enemy(unit.pos)
                 self.calc_future_actions(unit)
                 actions[unit.id][0] = unit.next_action()
@@ -89,6 +87,6 @@ class Attackers(Units):
                 m_pos = e_pos
         if m_pos is None:
             raise Exception(
-                "Assigned attacker without any enemy units (should have been checked earlier)"
+                f"Assigned attacker without any enemy units: {self.obs.enemy_units}"
             )
         return m_pos
